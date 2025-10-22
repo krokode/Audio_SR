@@ -99,6 +99,12 @@ def process_wav_chunked(model, wav_path, out_prefix, sr=16000):
     hop_size = chunk_size - OVERLAP
     num_chunks = (len(x_lr) - chunk_size) // hop_size + 1
     
+    # Calculate output size accounting for upscaling
+    output_chunk_size = chunk_size * UPSCALE_FACTOR
+    output_hop_size = hop_size * UPSCALE_FACTOR
+    output_overlap = OVERLAP * UPSCALE_FACTOR
+    output_xfade = XFADE_LEN * UPSCALE_FACTOR
+    
     print(f"Processing {num_chunks} chunks with {OVERLAP} sample overlap...")
     output = np.zeros(len(x_lr) * UPSCALE_FACTOR)
     
@@ -112,17 +118,25 @@ def process_wav_chunked(model, wav_path, out_prefix, sr=16000):
         pred = process_chunk(model, chunk)
         
         # Calculate output region accounting for upscaling
-        out_start = start * UPSCALE_FACTOR
-        out_end = end * UPSCALE_FACTOR
+        out_start = i * output_hop_size
+        out_end = out_start + output_chunk_size
         
         # Apply crossfade and add to output
         if i > 0:  # Not first chunk
-            crossfade(
-                output[out_start-XFADE_LEN*UPSCALE_FACTOR:out_start+XFADE_LEN*UPSCALE_FACTOR],
-                pred[:XFADE_LEN*2*UPSCALE_FACTOR],
-                XFADE_LEN*UPSCALE_FACTOR
-            )
-            output[out_start+XFADE_LEN*UPSCALE_FACTOR:out_end] = pred[XFADE_LEN*2*UPSCALE_FACTOR:]
+            # Create views of the overlapping regions
+            prev_region = output[out_start:out_start + output_xfade]
+            curr_region = pred[:output_xfade]
+            
+            # Apply crossfade
+            fade_out = np.linspace(1, 0, output_xfade)
+            fade_in = np.linspace(0, 1, output_xfade)
+            
+            # Combine with crossfade
+            output[out_start:out_start + output_xfade] = \
+                prev_region * fade_out + curr_region * fade_in
+            
+            # Copy remaining part of prediction
+            output[out_start + output_xfade:out_end] = pred[output_xfade:]
         else:  # First chunk
             output[out_start:out_end] = pred
         
