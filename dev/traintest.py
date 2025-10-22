@@ -50,9 +50,14 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
         
         # Calculate loss
         loss = criterion(outputs, targets)
-
-        # Backward pass and optimization
+        
+        # Backward pass
         loss.backward()
+        
+        # Clip gradients to prevent exploding gradients
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        
+        # Update weights
         optimizer.step()
 
         # Accumulate the loss

@@ -5,26 +5,33 @@ import librosa
 import soundfile as sf
 from scipy.signal import decimate
 from matplotlib import pyplot as plt
+from pathlib import Path
+import pickle
 
+def load_full_files():
+    """
+    Load full training and testing data files from pickled files.
+     Returns:
+        tuple: Four elements containing training inputs, training targets,
+               testing inputs, and testing targets.
+    """
+    root_dir = Path(__file__).parent.parent  # Get project root directory
+    xtrain_file_path = root_dir / 'data' / 'vctk' / 'speaker1' / 'full-data-vctk-speaker1-train.4.16000.-1'      
+    ytrain_file_path = root_dir / 'data' / 'vctk' / 'speaker1' / 'full-label-vctk-speaker1-train.4.16000.-1'     
+    xtest_file_path = root_dir / 'data' / 'vctk' / 'speaker1' / 'full-data-vctk-speaker1-val.4.16000.-1.4096'       
+    ytest_file_path = root_dir / 'data' / 'vctk' / 'speaker1' / 'full-label-vctk-speaker1-val.4.16000.-1.4096'      
 
-def load_full(path):
-    """
-    Loads all datasets from the root of an HDF5 file into a dictionary.
-    Args:
-        path (str or Path): Path to the HDF5 file.
-    Returns:
-        dict: A dictionary where keys are the dataset names 
-              and values are the loaded NumPy arrays.
-    """
-    data = {}
-    with h5py.File(path, 'r') as hf:
-        # hf (the file object) acts like a dictionary.
-        # We iterate over its keys to get the names of all top-level datasets/groups.
-        for key in hf.keys():
-            # hf[key] accesses the dataset object.
-            # hf[key][:] loads the entire dataset into memory as a NumPy array.
-            data[key] = hf[key][:]
-    return data
+    with open(xtrain_file_path, 'rb') as f:
+        xtrain_file_path_hr_patches = pickle.load(f)
+    with open(ytrain_file_path, 'rb') as f:
+        ytrain_file_path_hr_patches = pickle.load(f)
+    with open(xtest_file_path, 'rb') as f:
+        xtest_file_path_hr_patches = pickle.load(f)
+    with open(ytest_file_path, 'rb') as f:
+        ytest_file_path_hr_patches = pickle.load(f)
+
+    return xtrain_file_path_hr_patches, ytrain_file_path_hr_patches, xtest_file_path_hr_patches, ytest_file_path_hr_patches
+
 
 def load_h5(h5_path):
     # load training/test data
