@@ -24,12 +24,23 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
         # Move data to the specified device
         inputs, targets = inputs.to(device), targets.to(device)
 
-        # Add channel dimension: (batch_size, seq_len) -> (batch_size, 1, seq_len)
-        # This is required by the Conv1d layers in the model.
-        # if inputs.dim() == 2:
-        #     inputs = inputs.unsqueeze(1)
-        # if targets.dim() == 2:
-        #     targets = targets.unsqueeze(1)
+        # Ensure tensors are (batch, channels, seq_len) for Conv1d.
+        # Handle common dataset output shapes:
+        # - (batch, seq_len) -> add channel dim -> (batch, 1, seq_len)
+        # - (batch, seq_len, channels) where channels==1 -> permute to (batch, 1, seq_len)
+        if inputs.dim() == 3:
+            # If middle dimension is larger than last, assume (batch, seq_len, channels)
+            if inputs.shape[1] > inputs.shape[2]:
+                inputs = inputs.permute(0, 2, 1)
+            # else assume it's already (batch, channels, seq_len)
+        elif inputs.dim() == 2:
+            inputs = inputs.unsqueeze(1)
+
+        if targets.dim() == 3:
+            if targets.shape[1] > targets.shape[2]:
+                targets = targets.permute(0, 2, 1)
+        elif targets.dim() == 2:
+            targets = targets.unsqueeze(1)
 
         # Zero the parameter gradients
         optimizer.zero_grad()
@@ -73,11 +84,18 @@ def test_epoch(model, dataloader, criterion, device):
             # Move data to the specified device
             inputs, targets = inputs.to(device), targets.to(device)
 
-            # Add channel dimension: (batch_size, seq_len) -> (batch_size, 1, seq_len)
-            # if inputs.dim() == 2:
-            #     inputs = inputs.unsqueeze(1)
-            # if targets.dim() == 2:
-            #     targets = targets.unsqueeze(1)
+            # Ensure tensors are (batch, channels, seq_len) for Conv1d.
+            if inputs.dim() == 3:
+                if inputs.shape[1] > inputs.shape[2]:
+                    inputs = inputs.permute(0, 2, 1)
+            elif inputs.dim() == 2:
+                inputs = inputs.unsqueeze(1)
+
+            if targets.dim() == 3:
+                if targets.shape[1] > targets.shape[2]:
+                    targets = targets.permute(0, 2, 1)
+            elif targets.dim() == 2:
+                targets = targets.unsqueeze(1)
 
             # Forward pass
             outputs = model(inputs)

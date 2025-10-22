@@ -18,12 +18,61 @@ root_dir = Path(__file__).parent.parent  # Get project root directory
 train_file_path = root_dir / 'data' / 'vctk' / 'speaker1' / 'vctk-speaker1-train.4.16000.8192.4096.h5'      # Path to training data
 test_file_path = root_dir / 'data' / 'vctk' / 'speaker1' / 'vctk-speaker1-val.4.16000.8192.4096.h5.tmp'     # Path to test data
 
-model = create_tfilm_super_resolution(upscale_factor=UPSCALE_FACTOR).to(DEVICE)
+# Create model in quality improvement mode since input/target have same length
+model = create_tfilm_super_resolution(
+    upscale_factor=UPSCALE_FACTOR,
+    quality_mode=True,  # Focus on improving signal quality without changing length
+    base_channels=64,
+    tfilm_hidden_size=128,
+    block_size=256,
+    quality_mode=True
+).to(DEVICE)
 # summary(model)
 
-# Load data
+# Load data and print shapes for debugging
 X_train, y_train = load_h5(train_file_path)
 X_test, y_test = load_h5(test_file_path)
+
+# In VCTK dataset:
+# - 'data' contains low-resolution input (should be upsampled by model)
+# - 'label' contains high-resolution target (ground truth)
+print("\nLoaded data shapes:")
+print(f"Training - X (input): {X_train.shape}, y (target): {y_train.shape}")
+print(f"Testing  - X (input): {X_test.shape}, y (target): {y_test.shape}")
+
+def _ensure_input_target(X, Y, upscale):
+    """Validate and prepare input/target pairs for super-resolution training.
+    X should be the low-res input, Y the high-res target."""
+    in_len = X.shape[1]
+    tgt_len = Y.shape[1]
+    
+    # Case 1: Input needs to be upsampled to match target (normal case)
+    if in_len * upscale == tgt_len:
+        print("Input will be upsampled to match target resolution")
+        return X, Y
+        
+    # Case 2: Input and target are same length (target needs interpolation)
+    elif in_len == tgt_len:
+        print("Input and target same length. Model will learn to improve quality while preserving length.")
+        return X, Y
+        
+    # Case 3: Check if data/label are swapped
+    elif Y.shape[1] * upscale == X.shape[1]:
+        print("Detected reversed input/target in HDF5. Swapping X and Y.")
+        return Y, X
+        
+    # Error case: Incompatible shapes
+    raise RuntimeError(
+        f"Input/target lengths incompatible with upscale={upscale}:\n"
+        f"input_len={in_len}, target_len={tgt_len}\n"
+        f"Expected either:\n"
+        f"1. target_len = input_len * {upscale} (for normal upsampling), or\n"
+        f"2. target_len = input_len (for quality improvement)"
+    )
+
+X_train, y_train = _ensure_input_target(X_train, y_train, UPSCALE_FACTOR)
+X_test, y_test = _ensure_input_target(X_test, y_test, UPSCALE_FACTOR)
+
 # print(f"Training data 10 rows: {X_train[:10]}, {y_train[:10]}")
 # print(f"Test data 10 rows: {X_test[:10]}, {y_test[:10]}")
 

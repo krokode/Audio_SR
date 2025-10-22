@@ -6,6 +6,26 @@ import soundfile as sf
 from scipy.signal import decimate
 from matplotlib import pyplot as plt
 
+
+def load_full(path):
+    """
+    Loads all datasets from the root of an HDF5 file into a dictionary.
+    Args:
+        path (str or Path): Path to the HDF5 file.
+    Returns:
+        dict: A dictionary where keys are the dataset names 
+              and values are the loaded NumPy arrays.
+    """
+    data = {}
+    with h5py.File(path, 'r') as hf:
+        # hf (the file object) acts like a dictionary.
+        # We iterate over its keys to get the names of all top-level datasets/groups.
+        for key in hf.keys():
+            # hf[key] accesses the dataset object.
+            # hf[key][:] loads the entire dataset into memory as a NumPy array.
+            data[key] = hf[key][:]
+    return data
+
 def load_h5(h5_path):
     # load training/test data
     with h5py.File(h5_path, 'r') as hf:
