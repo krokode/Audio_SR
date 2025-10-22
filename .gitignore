@@ -148,7 +148,7 @@ activemq-data/
 *.sage.py
 
 # Data files
-*.pth
+#*.pth
 data/vctk/VCTK-Corpus/
 data/vctk/speaker1/full-data*
 data/vctk/speaker1/full-label*
