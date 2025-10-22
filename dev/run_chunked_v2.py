@@ -229,7 +229,7 @@ test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 criterion = nn.MSELoss()
 
-num_epochs = 2
+num_epochs = 10
 
 print("\nTraining configuration:")
 print(f"Device: {DEVICE}")
