@@ -17,7 +17,7 @@ import numpy as np
 import torch
 import soundfile as sf
 import librosa
-from model_ds_v1 import create_tfilm_super_resolution
+from model_ds_v2 import create_tfilm_super_resolution
 from utils import get_spectrum, save_spectrum
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'

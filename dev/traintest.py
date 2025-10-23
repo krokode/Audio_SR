@@ -2,6 +2,11 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm # Provides a progress bar
 
+def calculate_snr(original, reconstructed):
+    signal_power = torch.mean(original ** 2)
+    noise_power = torch.mean((original - reconstructed) ** 2)
+    return 10 * torch.log10(signal_power / (noise_power + 1e-8))
+
 def train_epoch(model, dataloader, optimizer, criterion, device):
     """
     Trains the model for one epoch.
@@ -18,6 +23,7 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
     """
     model.train()  # Set model to training mode
     total_loss = 0.0
+    total_snr = 0.0
 
     # Iterate over the training data with a progress bar
     for inputs, targets in tqdm(dataloader, desc="Training", leave=False):
@@ -62,9 +68,12 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
 
         # Accumulate the loss
         total_loss += loss.item()
+        # Calculate and accumulate SNR
+        total_snr += calculate_snr(targets, outputs).item()
+
 
     # Return the average loss for the epoch
-    return total_loss / len(dataloader)
+    return total_loss / len(dataloader), total_snr / len(dataloader)
 
 def test_epoch(model, dataloader, criterion, device):
     """
@@ -81,6 +90,7 @@ def test_epoch(model, dataloader, criterion, device):
     """
     model.eval()  # Set model to evaluation mode
     total_loss = 0.0
+    total_snr = 0.0
 
     # Disable gradient calculations
     with torch.no_grad():
@@ -110,6 +120,8 @@ def test_epoch(model, dataloader, criterion, device):
 
             # Accumulate the loss
             total_loss += loss.item()
+            # Calculate and accumulate SNR
+            total_snr += calculate_snr(targets, outputs).item()
 
     # Return the average loss for the epoch
-    return total_loss / len(dataloader)
+    return total_loss / len(dataloader), total_snr / len(dataloader)

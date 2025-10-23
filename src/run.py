@@ -16,6 +16,8 @@ from model_ds_v2 import TFiLMSuperResolution, create_tfilm_super_resolution
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BATCH_SIZE = 64
 UPSCALE_FACTOR = 4
+NUM_EPOCHS = 1
+
 
 root_dir = Path(__file__).parent.parent  # Get project root directory
 train_file_path = root_dir / 'data' / 'vctk' / 'speaker1' / 'vctk-speaker1-train.4.16000.8192.4096.h5'      # Path to training data
@@ -34,7 +36,7 @@ def _ensure_input_target(X, Y, upscale):
         
     # Case 2: Input and target are same length (target needs interpolation)
     elif in_len == tgt_len:
-        print("Input and target same length. Model will learn to improve quality while preserving length.")
+        print(f"Input {in_len} and target {tgt_len} same length. Model will learn to improve quality while preserving length.")
         return X, Y
         
     # Case 3: Check if data/label are swapped
@@ -86,7 +88,7 @@ test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
 criterion = nn.MSELoss()
 
-num_epochs = 1
+num_epochs = NUM_EPOCHS
 
 print("Starting training...")
 

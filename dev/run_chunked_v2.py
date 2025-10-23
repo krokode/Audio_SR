@@ -17,6 +17,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BATCH_SIZE = 64
 UPSCALE_FACTOR = 4
 CHUNK_SIZE = 8192  # Base chunk size for input sequences
+NUM_EPOCHS = 10
 
 print(f"Using device: {DEVICE}")
 
@@ -33,7 +34,7 @@ def _ensure_input_target(X, Y, upscale):
     
     # Case 2: Input and target are same length (target needs interpolation)
     elif in_len == tgt_len:
-        print("Input and target same length. Model will learn to improve quality while preserving length.")
+        print(f"Input {in_len} and target {tgt_len} same length. Model will learn to improve quality while preserving length.")
         return X, Y
     
     # Case 3: Check if data/label are swapped
@@ -95,25 +96,11 @@ print(f"Sample X_train shape: {np.array(X_train[0]).shape}")
 print(f"y_train type: {type(y_train)}, length: {len(y_train)}")
 print(f"Sample y_train shape: {np.array(y_train[0]).shape}")
 
-def normalize_audio(data):
-    """Normalize audio data to [-1, 1] range"""
-    if isinstance(data, list):
-        # Handle list of sequences
-        normalized = []
-        for seq in data:
-            seq = np.array(seq)
-            max_val = np.abs(seq).max()
-            if max_val > 0:
-                normalized.append(seq / max_val)
-            else:
-                normalized.append(seq)
-        return normalized
-    else:
-        # Handle numpy array
-        max_val = np.abs(data).max()
-        if max_val > 0:
-            return data / max_val
-        return data
+# Add data augmentation
+def augment_chunk(chunk):
+    # Add small random noise
+    noise = np.random.normal(0, 0.001, chunk.shape)
+    return chunk + noise
 
 def process_sequences_to_chunks(sequences, chunk_size=CHUNK_SIZE):
     """Process sequences into fixed-size chunks.
@@ -157,6 +144,7 @@ def process_sequences_to_chunks(sequences, chunk_size=CHUNK_SIZE):
             
             # Create downsampled input chunk by averaging groups of UPSCALE_FACTOR samples
             input_chunk = np.mean(target_chunk.reshape(-1, UPSCALE_FACTOR), axis=1)
+            # input_chunk = augment_chunk(input_chunk)  # Add augmentation
             
             # Verify chunk sizes
             if len(input_chunk) == chunk_size and len(target_chunk) == chunk_size * UPSCALE_FACTOR:
@@ -230,7 +218,7 @@ test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
 criterion = nn.MSELoss()
 
-num_epochs = 10
+num_epochs = NUM_EPOCHS
 
 print("\nTraining configuration:")
 print(f"Device: {DEVICE}")
@@ -247,10 +235,10 @@ for epoch in range(num_epochs):
     start_time = time.time()
     
     # Run one training epoch
-    train_loss = train_epoch(model, train_loader, optimizer, criterion, DEVICE)
+    train_loss, train_snr = train_epoch(model, train_loader, optimizer, criterion, DEVICE)
     
     # Run one testing (validation) epoch
-    test_loss = test_epoch(model, test_loader, criterion, DEVICE)
+    test_loss, test_snr = test_epoch(model, test_loader, criterion, DEVICE)
     
     end_time = time.time()
     
@@ -258,6 +246,7 @@ for epoch in range(num_epochs):
           f"Train Loss: {train_loss:.4f} | "
           f"Test Loss: {test_loss:.4f} | "
           f"Time: {end_time - start_time:.2f}s")
+    print(f"            | Train SNR: {train_snr:.2f} dB | Test SNR: {test_snr:.2f} dB")
 
 print("Training finished.")
 
