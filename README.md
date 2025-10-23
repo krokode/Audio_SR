@@ -22,10 +22,15 @@ For Windows
 ```
 makefile.ps1
 ```
-5. Train model for 50 epochs
+5. Train model on H5 files for 50 epochs
 ```
 cd ../../../src
 python3 run.py
 ```
 6. To train for more epochs edit run.py NUM_EPOCHS variable
+7. There is another otion to train model on pickle files
+```
+cd ../dev
+python3 run_chunked_v2.py
+```
 
