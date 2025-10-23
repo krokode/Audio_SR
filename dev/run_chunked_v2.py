@@ -17,7 +17,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BATCH_SIZE = 64
 UPSCALE_FACTOR = 4
 CHUNK_SIZE = 8192  # Base chunk size for input sequences
-NUM_EPOCHS = 10
+NUM_EPOCHS = 50
 
 print(f"Using device: {DEVICE}")
 

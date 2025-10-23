@@ -16,7 +16,7 @@ from model_ds_v2 import TFiLMSuperResolution, create_tfilm_super_resolution
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BATCH_SIZE = 64
 UPSCALE_FACTOR = 4
-NUM_EPOCHS = 1
+NUM_EPOCHS = 50
 
 
 root_dir = Path(__file__).parent.parent  # Get project root directory
