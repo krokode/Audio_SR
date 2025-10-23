@@ -28,7 +28,7 @@ cd ../../../src
 python3 run.py
 ```
 6. To train for more epochs edit run.py NUM_EPOCHS variable
-7. There is another otion to train model on pickle files
+7. There is another option to train model on pickle files
 ```
 cd ../dev
 python3 run_chunked_v2.py
