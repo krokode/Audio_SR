@@ -7,10 +7,11 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 from torchinfo import summary
-
-from model_ds_v1 import TFiLMSuperResolution, create_tfilm_super_resolution
 from traintest import train_epoch, test_epoch
 import time
+
+# from model_ds_v1 import TFiLMSuperResolution, create_tfilm_super_resolution
+from model_ds_v2 import TFiLMSuperResolution, create_tfilm_super_resolution
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BATCH_SIZE = 64
@@ -82,7 +83,7 @@ test_dataset = torch.utils.data.TensorDataset(torch.tensor(X_test, dtype=torch.f
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
-optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
 criterion = nn.MSELoss()
 
 num_epochs = 1
@@ -107,7 +108,7 @@ for epoch in range(num_epochs):
 
 print("Training finished.")
 
-summary(model)
+# summary(model)
 
 # (Optional: save the model)
 torch.save(model.state_dict(), 'tfilm_superres_quality_model.pth')
