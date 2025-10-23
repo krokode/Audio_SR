@@ -147,7 +147,7 @@ class TFiLMSuperResolution(nn.Module):
             # If you want to get fancy, 
             # you can make it progressive (e.g., 1 → 2 → 4 → 8 for deeper layers), which is also reasonable per Appendix B
             # so deeper layers see a larger temporal context
-            dilation = 2 ** i 
+            dilation = min(2 ** i, 8)  # Cap at 8 to avoid excessive dilation 
             
             # Compute padding to preserve receptive field with dilation
             padding = ((kernel_size - 1) * dilation) // 2 # padding = ((kernel_size - 1) // 2) * dilation 
