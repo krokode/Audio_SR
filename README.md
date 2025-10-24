@@ -3,7 +3,7 @@
 git clone https://github.com/krokode/Audio_SR.git
 cd AUDIO_SR
 ```
-2. Create vertual environment and install required packages
+2. Create virtual environment and install required packages
 ```
 pip install -r requirements.txt
 ```
