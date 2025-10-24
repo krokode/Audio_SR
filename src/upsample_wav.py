@@ -1,5 +1,6 @@
 """Run inference on a WAV file using a trained TFiLM model.
-
+Usage (Linux/Mac):
+    python src/upsample_wav.py --model path/to/model.pth --wav input.wav --out output
 Usage (PowerShell):
     python .\src\upsample_wav.py --model checkpoint.pth --wav input.wav --out out_prefix
 
@@ -11,6 +12,7 @@ This script:
 - Runs the model to generate a prediction and saves `<out>.pr.wav` and `<out>.hr.wav`
 - Also saves spectrogram PNGs alongside the audio files
 """
+import os
 import argparse
 from pathlib import Path
 import numpy as np
@@ -103,33 +105,51 @@ def process_wav(model, wav_path, out_prefix, sr=16000, r=4, patch_size=8192):
     x_lr_upsampled = librosa.resample(x_lr, orig_sr=fs//r, target_sr=fs)
     x_lr_upsampled = x_lr_upsampled[:len(y_pred)]  # Ensure same length
     
-    # Create summed version (normalize to prevent clipping)
-    y_sum = y_pred + x_lr_upsampled
-    y_sum = y_sum / np.max(np.abs(y_sum))  # Normalize to [-1, 1]
+    # Create summed versions (normalize to prevent clipping)
+    # Sum 1: LR + PR (Enhancement added to input)
+    y_sum_lr = y_pred + x_lr_upsampled
+    y_sum_lr = y_sum_lr / np.max(np.abs(y_sum_lr))
     
+    # Sum 2: HR + PR (Enhancement added to reference)
+    y_sum_hr = y_pred + x_hr_padded[:len(y_pred)]
+    y_sum_hr = y_sum_hr / np.max(np.abs(y_sum_hr))
+
+    # Convert output prefix to Path object first
     out_prefix = Path(out_prefix)
-    
-    # Save all audio files
-    sf.write(str(out_prefix) + '.lr.wav', x_lr, int(fs / r))
-    sf.write(str(out_prefix) + '.hr.wav', x_hr_padded, fs)
-    sf.write(str(out_prefix) + '.pr.wav', y_pred, fs)
-    sf.write(str(out_prefix) + '.sum.wav', y_sum, fs)
-    
-    # Create comparison visualization
-    signals = [x_hr_padded, x_lr_upsampled, y_pred, y_sum]
-    srs = [fs] * 4
-    names = ['Original (HR)', 'Input (LR)', 'Predicted (PR)', 'Combined (Sum)']
-    plot_comparison(signals, srs, names, str(out_prefix) + '.comparison.png')
-    
-    # Save individual spectrograms
+
+    # Create visualization directory structure under `visualizations/<out_prefix>`
+    visualization_dir = Path("visualizations")
+    viz_target = visualization_dir / out_prefix
+    os.makedirs(viz_target, exist_ok=True)
+
+    # Base filename (used as prefix inside viz_target)
+    base_name = out_prefix.name
+
+    # Save all audio files into the visualization target directory
+    sf.write(str(viz_target / (base_name + '.lr.wav')), x_lr, int(fs / r))
+    sf.write(str(viz_target / (base_name + '.hr.wav')), x_hr_padded, fs)
+    sf.write(str(viz_target / (base_name + '.pr.wav')), y_pred, fs)
+    sf.write(str(viz_target / (base_name + '.sum_lr.wav')), y_sum_lr, fs)  # LR + PR
+    sf.write(str(viz_target / (base_name + '.sum_hr.wav')), y_sum_hr, fs)  # HR + PR
+
+    # Create comparison visualization (saved inside viz_target)
+    signals = [x_hr_padded, x_lr_upsampled, y_pred, y_sum_lr, y_sum_hr]
+    srs = [fs] * 5
+    names = ['Original (HR)', 'Input (LR)', 'Predicted (PR)', 
+             'Combined (LR+PR)', 'Combined (HR+PR)']
+    plot_comparison(signals, srs, names, str(viz_target / (base_name + '.comparison.png')))
+
+    # Save individual spectrograms inside viz_target
     S_pr = get_spectrum(y_pred)
-    save_spectrum(S_pr, outfile=str(out_prefix) + '.pr.png')
+    save_spectrum(S_pr, outfile=str(viz_target / (base_name + '.pr.png')))
     S_hr = get_spectrum(x_hr_padded)
-    save_spectrum(S_hr, outfile=str(out_prefix) + '.hr.png')
-    S_sum = get_spectrum(y_sum)
-    save_spectrum(S_sum, outfile=str(out_prefix) + '.sum.png')
-    S_lr = get_spectrum(x_lr)
-    save_spectrum(S_lr, outfile=str(out_prefix) + '.lr.png')
+    save_spectrum(S_hr, outfile=str(viz_target / (base_name + '.hr.png')))
+    S_sum_lr = get_spectrum(y_sum_lr)
+    save_spectrum(S_sum_lr, outfile=str(viz_target / (base_name + '.sum_lr.png')))
+    S_sum_hr = get_spectrum(y_sum_hr)
+    save_spectrum(S_sum_hr, outfile=str(viz_target / (base_name + '.sum_hr.png')))
+    S_lr = get_spectrum(x_lr_upsampled)
+    save_spectrum(S_lr, outfile=str(viz_target / (base_name + '.lr.png')))
 
 
 def main():
