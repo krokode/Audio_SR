@@ -4,7 +4,7 @@ Usage (PowerShell):
     python .\src\upsample_wav.py --model checkpoint.pth --wav input.wav --out out_prefix
 
 This script:
-- Loads the model architecture from `src/model_ds_v1.py`
+- Loads the model architecture from `src/model_ds_v2.py`
 - Loads weights from a checkpoint
 - Loads `input.wav` (resamples if necessary)
 - Produces a low-res version (decimated) and saves it as `<out> .lr.wav`
@@ -17,10 +17,51 @@ import numpy as np
 import torch
 import soundfile as sf
 import librosa
+import librosa.display
+import matplotlib.pyplot as plt
 from model_ds_v2 import create_tfilm_super_resolution
 from utils import get_spectrum, save_spectrum
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+
+def plot_comparison(signals, srs, names, out_path, duration=3.0):
+    """Plot waveform and spectrogram comparisons.
+    
+    Args:
+        signals: List of signals to compare
+        srs: List of sample rates for each signal
+        names: List of names for each signal
+        out_path: Output path for plot
+        duration: Duration in seconds to plot
+    """
+    n_signals = len(signals)
+    fig, axes = plt.subplots(n_signals, 2, figsize=(15, 4*n_signals))
+    
+    for i, (signal, sr, name) in enumerate(zip(signals, srs, names)):
+        # Take first N seconds
+        n_samples = int(duration * sr)
+        signal = signal[:n_samples]
+        t = np.linspace(0, duration, len(signal))
+        
+        # Waveform
+        axes[i,0].plot(t, signal, label=name)
+        axes[i,0].set_title(f'{name} - Waveform')
+        axes[i,0].set_xlabel('Time (s)')
+        axes[i,0].set_ylabel('Amplitude')
+        axes[i,0].grid(True)
+        
+        # Spectrogram
+        D = librosa.stft(signal)
+        S_db = librosa.amplitude_to_db(np.abs(D), ref=np.max)
+        img = librosa.display.specshow(S_db, sr=sr, x_axis='time', y_axis='log',
+                                     ax=axes[i,1])
+        axes[i,1].set_title(f'{name} - Spectrogram')
+        plt.colorbar(img, ax=axes[i,1], format='%+2.0f dB')
+    
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=150, bbox_inches='tight')
+    plt.close()
 
 
 def load_model(checkpoint_path, upscale_factor=4, quality_mode=False):
@@ -58,16 +99,35 @@ def process_wav(model, wav_path, out_prefix, sr=16000, r=4, patch_size=8192):
     x_hr_padded = x_hr_padded[:len(y_pred)]
     x_lr = x_lr[:len(y_pred)//r]
 
+    # Upsample x_lr to match y_pred's length for summing
+    x_lr_upsampled = librosa.resample(x_lr, orig_sr=fs//r, target_sr=fs)
+    x_lr_upsampled = x_lr_upsampled[:len(y_pred)]  # Ensure same length
+    
+    # Create summed version (normalize to prevent clipping)
+    y_sum = y_pred + x_lr_upsampled
+    y_sum = y_sum / np.max(np.abs(y_sum))  # Normalize to [-1, 1]
+    
     out_prefix = Path(out_prefix)
+    
+    # Save all audio files
     sf.write(str(out_prefix) + '.lr.wav', x_lr, int(fs / r))
     sf.write(str(out_prefix) + '.hr.wav', x_hr_padded, fs)
     sf.write(str(out_prefix) + '.pr.wav', y_pred, fs)
-
-    # Save spectrograms
+    sf.write(str(out_prefix) + '.sum.wav', y_sum, fs)
+    
+    # Create comparison visualization
+    signals = [x_hr_padded, x_lr_upsampled, y_pred, y_sum]
+    srs = [fs] * 4
+    names = ['Original (HR)', 'Input (LR)', 'Predicted (PR)', 'Combined (Sum)']
+    plot_comparison(signals, srs, names, str(out_prefix) + '.comparison.png')
+    
+    # Save individual spectrograms
     S_pr = get_spectrum(y_pred)
     save_spectrum(S_pr, outfile=str(out_prefix) + '.pr.png')
     S_hr = get_spectrum(x_hr_padded)
     save_spectrum(S_hr, outfile=str(out_prefix) + '.hr.png')
+    S_sum = get_spectrum(y_sum)
+    save_spectrum(S_sum, outfile=str(out_prefix) + '.sum.png')
     S_lr = get_spectrum(x_lr)
     save_spectrum(S_lr, outfile=str(out_prefix) + '.lr.png')
 
