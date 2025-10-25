@@ -12,6 +12,9 @@ from model_ds_v2 import create_tfilm_super_resolution
 from utils import get_spectrum, save_spectrum
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+NORMALIZE_INPUT = True  # Whether to normalize input audio to [-1, 1]
+QUALITY_MODE = True  # Whether the model is in quality enhancement mode (output same length as input)
+UPSCALE_FACTOR = 4
 
 # Run inference on a WAV file using a trained TFiLM model.
 # Usage (Linux/Mac):
@@ -66,7 +69,7 @@ def plot_comparison(signals, srs, names, out_path, duration=3.0):
     plt.close()
 
 
-def load_model(checkpoint_path, upscale_factor=4, quality_mode=True):
+def load_model(checkpoint_path, upscale_factor=6, quality_mode=False):
     """Load trained model from checkpoint."""
     # Create model as it was during training
     model = create_tfilm_super_resolution(
@@ -90,13 +93,13 @@ def load_model(checkpoint_path, upscale_factor=4, quality_mode=True):
     print(f"Trainable parameters: {trainable_params:,}\n")
     
     # Normalize to a state_dict mapping
-    if isinstance(ckpt, dict) and 'state_dict' in ckpt:
-        state_dict = ckpt['state_dict']
-        print("Checkpoint contains 'state_dict' key; using that for loading.")
+    if isinstance(ckpt, dict) and 'model_state_dict' in ckpt:
+        state_dict = ckpt['model_state_dict']
+        print("Checkpoint contains 'model_state_dict' key; using that for loading.")
         print("Loaded state_dict keys:", state_dict.keys())
     elif isinstance(ckpt, dict):
         state_dict = ckpt
-        print("Checkpoint does not contain 'state_dict' key; using raw checkpoint.")
+        print("Checkpoint does not contain 'model_state_dict' key; using raw checkpoint.")
         print("Loaded state_dict keys:", state_dict.keys())
     else:
         raise TypeError(f"Unexpected checkpoint object type: {type(ckpt)}")
@@ -269,8 +272,8 @@ def main():
     parser.add_argument('--patch_size', type=int, default=8192)
     args = parser.parse_args()
 
-    model = load_model(args.model, upscale_factor=args.r, quality_mode=True)  # Match training configuration
-    process_wav(model, args.wav, args.out, sr=args.sr, r=args.r, patch_size=args.patch_size, normalize_input=True)
+    model = load_model(args.model, upscale_factor=args.r, quality_mode=QUALITY_MODE)  # Match training configuration
+    process_wav(model, args.wav, args.out, sr=args.sr, r=args.r, patch_size=args.patch_size, normalize_input=NORMALIZE_INPUT)
 
 
 if __name__ == '__main__':

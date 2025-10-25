@@ -179,11 +179,8 @@ class TFiLMSuperResolution(nn.Module):
                 UpsamplingBlock(in_ch_up * 2, out_ch_up, kernel_size, scale_factor=2, dilation=1)
             )
         
-        # Final output layer with better initialization
+        # Final output layer
         self.final_conv = nn.Conv1d(out_ch_up, input_channels, kernel_size=3, padding=1)
-        # Initialize final layer close to identity function
-        nn.init.zeros_(self.final_conv.weight)
-        nn.init.zeros_(self.final_conv.bias)
         
         # Initial cubic upscaling to match target length (as mentioned in paper)
         self.initial_upscale = None

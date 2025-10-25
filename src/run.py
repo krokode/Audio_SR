@@ -17,7 +17,7 @@ from model_ds_v2 import TFiLMSuperResolution, create_tfilm_super_resolution
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BATCH_SIZE = 64
 UPSCALE_FACTOR = 4
-NUM_EPOCHS = 50
+NUM_EPOCHS = 1
 
 
 root_dir = Path(__file__).parent.parent  # Get project root directory
@@ -29,22 +29,46 @@ class SpectralLoss(nn.Module):
     def __init__(self, alpha=0.5):
         super().__init__()
         self.alpha = alpha
+        self.n_fft = 512
+        self.hop_length = 256
+        self.register_buffer('window', torch.hann_window(self.n_fft))
     
     def forward(self, y_pred, y_true):
+        # Handle input shape (batch, seq_len, channels) -> (batch, channels, seq_len)
+        if y_pred.shape[-1] == 1:
+            y_pred = y_pred.transpose(1, 2)
+            y_true = y_true.transpose(1, 2)
+            
         # Time domain loss (MSE)
         mse_loss = F.mse_loss(y_pred, y_true)
         
-        # Frequency domain loss
-        y_pred_fft = torch.stft(y_pred.squeeze(1), n_fft=512, hop_length=256, 
-                               win_length=512, return_complex=True)
-        y_true_fft = torch.stft(y_true.squeeze(1), n_fft=512, hop_length=256, 
-                               win_length=512, return_complex=True)
+        # Reshape for STFT: (batch, channels, seq_len) -> (batch * channels, seq_len)
+        batch_size, channels, seq_len = y_pred.shape
+        y_pred_flat = y_pred.reshape(-1, seq_len)
+        y_true_flat = y_true.reshape(-1, seq_len)
+        
+        # Frequency domain loss with Hann window
+        y_pred_fft = torch.stft(y_pred_flat, n_fft=self.n_fft, 
+                               hop_length=self.hop_length,
+                               win_length=self.n_fft,
+                               window=self.window,
+                               return_complex=True)
+        y_true_fft = torch.stft(y_true_flat, n_fft=self.n_fft,
+                               hop_length=self.hop_length,
+                               win_length=self.n_fft,
+                               window=self.window,
+                               return_complex=True)
         
         # Magnitude loss in frequency domain
         spec_loss = F.mse_loss(y_pred_fft.abs(), y_true_fft.abs())
         
-        # Combined loss
-        return (1 - self.alpha) * mse_loss + self.alpha * spec_loss
+        # Combined loss with logging
+        loss = (1 - self.alpha) * mse_loss + self.alpha * spec_loss
+        if torch.isnan(loss).any():
+            print(f"WARNING: NaN in loss. MSE: {mse_loss:.3e}, Spec: {spec_loss:.3e}")
+            return mse_loss  # Fallback to just MSE if spectral loss fails
+            
+        return loss
 
 def _ensure_input_target(X, Y, upscale):
     """Validate and prepare input/target pairs for super-resolution training.
@@ -108,9 +132,9 @@ test_dataset = torch.utils.data.TensorDataset(torch.tensor(X_test, dtype=torch.f
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
-optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
+optimizer = torch.optim.Adam(model.parameters(), lr=3e-4, weight_decay=1e-5)
 #criterion = nn.MSELoss()
-criterion = SpectralLoss(alpha=0.5)
+criterion = SpectralLoss(alpha=0.8)  # Increase spectral loss weight
 num_epochs = NUM_EPOCHS
 
 print("Starting training...")
@@ -130,18 +154,16 @@ for epoch in range(num_epochs):
           f"Train Loss: {train_loss} | "
           f"Test Loss: {test_loss} | "
           f"Time: {end_time - start_time:.2f}s")
+    
+    if epoch >= NUM_EPOCHS - 1:
+        print(f"Training finished. {epoch + 1} epochs completed")
+        checkpoint = {
+            'epoch': epoch + 1,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'loss': criterion.state_dict(),
+        }
+        torch.save(checkpoint, f'checkpoint_epoch_{epoch+1}.pth')
 
-print("Training finished.")
 
 summary(model)
-# torch.save(model.state_dict(), 'model.pth')
-
-# (Optional: save the model)
-checkpoint = {
-    'epoch': epoch,
-    'model_state_dict': model.state_dict(),
-    'optimizer_state_dict': optimizer.state_dict(),
-    'loss': criterion.state_dict(),
-}
-
-torch.save(checkpoint, f'model_{epoch}.pth')
