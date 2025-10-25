@@ -77,7 +77,7 @@ def load_model(checkpoint_path, upscale_factor=4, quality_mode=True):
         tfilm_hidden_size=128,
         block_size=256
     )
-    
+    print("Model Initial architecture:")
     summary(model)
     
     # Load checkpoint file
@@ -99,6 +99,8 @@ def load_model(checkpoint_path, upscale_factor=4, quality_mode=True):
     try:
         model.load_state_dict(state_dict)
         print("Checkpoint loaded (strict).")
+        print("Model Loaded all parameters successfully.")
+        summary(model)        
     except Exception as exc:
         # Strict load failed - attempt a filtered partial load
         print("Strict load failed:", exc)
@@ -120,6 +122,9 @@ def load_model(checkpoint_path, upscale_factor=4, quality_mode=True):
         # Load filtered params non-strictly
         model.load_state_dict(filtered, strict=False)
 
+        print("Partial checkpoint load complete.")
+        summary(model)
+
         print(f"Partially loaded {len(filtered)} parameters; skipped {len(skipped)} entries.")
         if len(skipped) > 0:
             print("Skipped examples (name, ckpt_shape, model_shape):")
@@ -130,10 +135,22 @@ def load_model(checkpoint_path, upscale_factor=4, quality_mode=True):
     model.eval()
     return model
 
+def normalize(x):
+    """Normalize audio to [-1, 1] range."""
+    x = np.asarray(x, dtype=np.float32)
+    max_val = np.abs(x).max()
+    if max_val > 0:
+        return x / max_val
+    return x
 
-def process_wav(model, wav_path, out_prefix, sr=16000, r=4, patch_size=8192):
-    # Load high-res waveform
-    x_hr, fs = librosa.load(wav_path, sr=sr)
+def process_wav(model, wav_path, out_prefix, sr=16000, r=4, patch_size=8192, normalize_input=True):
+    if normalize_input:
+        print("Normalizing input audio...")
+        x_hr, fs = librosa.load(wav_path, sr=sr)
+        x_hr = normalize(x_hr)
+    else:
+        # Load high-res waveform
+        x_hr, fs = librosa.load(wav_path, sr=sr)
 
     # Create low-res by decimating
     x_lr = librosa.resample(x_hr, orig_sr=fs, target_sr=fs//r)
