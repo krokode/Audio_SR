@@ -148,13 +148,13 @@ activemq-data/
 *.sage.py
 
 # Data files
-# *.pth
+*.pth
 # src/visualizations/
 data/vctk/VCTK-Corpus/
 data/vctk/speaker1/full-data*
 data/vctk/speaker1/full-label*
 data/vctk/speaker1/ID_list*
-data/vctk/speaker1/vctk-speaker1*
+data/vctk/speaker1/*vctk-speaker1*
 
 # virtualenv
 .ASR_venv/
