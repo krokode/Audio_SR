@@ -108,25 +108,25 @@ class TFiLMSuperResolution(nn.Module):
                  quality_mode=True):  # If True, maintain input length and focus on quality
         super(TFiLMSuperResolution, self).__init__()
         
-        self.upscale_factor = 1 if quality_mode else upscale_factor
+        self.upscale_factor = upscale_factor # 1 if quality_mode else upscale_factor
         self.num_blocks = num_blocks
         self.quality_mode = quality_mode
         
         # Calculate how many up/down sampling steps we need
         # In quality mode, we use blocks for feature extraction without changing length
-        if quality_mode:
-            self.num_upsample_steps = self.num_blocks  # Match downs with ups to preserve length
-            print("Quality improvement mode: maintaining input length")
-        else:
+        # if quality_mode:
+        #     self.num_upsample_steps = self.num_blocks  # Match downs with ups to preserve length
+        #     print("Quality improvement mode: maintaining input length")
+        # else:
             # upscale_factor = 2^(num_upsample_steps)
-            self.num_upsample_steps = int(torch.log2(torch.tensor(upscale_factor)).item())
-            print(f"Upscaling mode - factor: {upscale_factor}")
-            print(f"Number of upsampling steps needed: {self.num_upsample_steps}")
+        self.num_upsample_steps = int(torch.log2(torch.tensor(upscale_factor)).item())
+        print(f"Upscaling mode - factor: {upscale_factor}")
+        print(f"Number of upsampling steps needed: {self.num_upsample_steps}")
             
-            # Adjust number of blocks if needed
-            if self.num_upsample_steps > num_blocks:
-                print(f"Warning: Requested upscale factor {upscale_factor} requires {self.num_upsample_steps} blocks, but only {num_blocks} available")
-                self.num_upsample_steps = num_blocks
+        # Adjust number of blocks if needed
+        if self.num_upsample_steps > num_blocks:
+            print(f"Warning: Requested upscale factor {upscale_factor} requires {self.num_upsample_steps} blocks, but only {num_blocks} available")
+            self.num_upsample_steps = num_blocks
         
         self.down_blocks = nn.ModuleList()
         self.up_blocks = nn.ModuleList()
@@ -142,12 +142,12 @@ class TFiLMSuperResolution(nn.Module):
             kernel_size = max(128 // (2 ** i) + 1, 9)
 
             # 👇 Use dilation (we'll modify stride next step)
-            # dilation = 2  # from Appendix B
+            dilation = 2  # from Appendix B
             
             # If you want to get fancy, 
             # you can make it progressive (e.g., 1 → 2 → 4 → 8 for deeper layers), which is also reasonable per Appendix B
             # so deeper layers see a larger temporal context
-            dilation = min(2 ** i, 8)  # Cap at 8 to avoid excessive dilation 
+            # dilation = min(2 ** i, 8)  # Cap at 8 to avoid excessive dilation 
             
             # Compute padding to preserve receptive field with dilation
             padding = ((kernel_size - 1) * dilation) // 2 # padding = ((kernel_size - 1) // 2) * dilation 
@@ -257,12 +257,13 @@ def create_tfilm_super_resolution(upscale_factor, quality_mode=False, **kwargs):
         **kwargs: Additional arguments passed to TFiLMSuperResolution
     """
     # For quality mode, use more blocks for better feature extraction
-    if quality_mode:
-        num_blocks = 4  # Fixed number for quality improvement
-    else:
-        # For upscaling, determine blocks based on factor
-        num_blocks = max(2, int(torch.log2(torch.tensor(upscale_factor)).item()))
+    # if quality_mode:
+    #     num_blocks = 4  # Fixed number for quality improvement
+    # else:
+    #     # For upscaling, determine blocks based on factor
+    #     num_blocks = max(2, int(torch.log2(torch.tensor(upscale_factor)).item()))
     
+    num_blocks = max(2, int(torch.log2(torch.tensor(upscale_factor)).item()))
     model = TFiLMSuperResolution(
         upscale_factor=upscale_factor,
         num_blocks=num_blocks,

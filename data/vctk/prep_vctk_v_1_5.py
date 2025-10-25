@@ -64,8 +64,8 @@ def add_data(h5_file, inputfiles, args, save_examples=False):
             d, d_lr = args.dimension, args.dimension
             s, s_lr = args.stride, args.stride
         else:
-            d, d_lr = args.dimension, args.dimension / args.scale
-            s, s_lr = args.stride, args.stride / args.scale
+            d, d_lr = int(args.dimension), int(args.dimension / args.scale)
+            s, s_lr = int(args.stride), int(args.stride / args.scale)
     hr_patches, lr_patches = list(), list()
 
     print(len(file_list))
@@ -107,10 +107,10 @@ def add_data(h5_file, inputfiles, args, save_examples=False):
                 if args.interpolate:
                     i_lr = i
                 else:
-                    i_lr = i / args.scale
+                    i_lr = int(i / args.scale)
 
                 hr_patch = np.array( x[i : i+d] )
-                lr_patch = np.array( x_lr[(i_lr) : (i_lr+d_lr)] )
+                lr_patch = np.array( x_lr[int(i_lr) : int(i_lr+d_lr)] )
 
                 assert len(hr_patch) == d
                 assert len(lr_patch) == d_lr

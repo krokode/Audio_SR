@@ -11,18 +11,19 @@ from torchinfo import summary
 from traintest import train_epoch, test_epoch
 import time
 
-# from model_ds_v1 import TFiLMSuperResolution, create_tfilm_super_resolution
-from model_ds_v2 import TFiLMSuperResolution, create_tfilm_super_resolution
+from model_ds_v1_5 import TFiLMSuperResolution, create_tfilm_super_resolution
+# from model_ds_v2 import TFiLMSuperResolution, create_tfilm_super_resolution
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 BATCH_SIZE = 64
 UPSCALE_FACTOR = 4
-NUM_EPOCHS = 1
+NUM_EPOCHS = 50
+QUALITY_MODE = False # True if focusing on improving signal quality without changing length
 
 
 root_dir = Path(__file__).parent.parent  # Get project root directory
-train_file_path = root_dir / 'data' / 'vctk' / 'speaker1' / 'vctk-speaker1-train.4.16000.8192.4096.h5'      # Path to training data
-test_file_path = root_dir / 'data' / 'vctk' / 'speaker1' / 'vctk-speaker1-val.4.16000.8192.4096.h5.tmp'     # Path to test data
+train_file_path = root_dir / 'data' / 'vctk' / 'speaker1' / 'v_1_5_vctk-speaker1-train.4.16000.8192.4096.h5'      # Path to training data
+test_file_path = root_dir / 'data' / 'vctk' / 'speaker1' / 'v_1_5_vctk-speaker1-val.4.16000.8192.4096.h5.tmp'     # Path to test data
 
 # Custom loss that combines MSE with frequency domain loss
 class SpectralLoss(nn.Module):
@@ -104,7 +105,7 @@ def _ensure_input_target(X, Y, upscale):
 # Create model in quality improvement mode since input/target have same length
 model = create_tfilm_super_resolution(
     upscale_factor=UPSCALE_FACTOR,
-    quality_mode=True,  # Focus on improving signal quality without changing length
+    quality_mode=QUALITY_MODE,  
     base_channels=64,
     tfilm_hidden_size=128,
     block_size=256
@@ -120,11 +121,11 @@ X_test, y_test = load_h5(test_file_path)
 # - 'data' contains low-resolution input (should be upsampled by model)
 # - 'label' contains high-resolution target (ground truth)
 print("\nLoaded data shapes:")
-print(f"Training - X (input): {X_train.shape}, y (target): {y_train.shape}")
-print(f"Testing  - X (input): {X_test.shape}, y (target): {y_test.shape}")
+print(f"Training - X (input_lr): {X_train.shape}, y (target_hr): {y_train.shape}")
+print(f"Testing  - X (input_lr): {X_test.shape}, y (target_hr): {y_test.shape}")
 
-X_train, y_train = _ensure_input_target(X_train, y_train, UPSCALE_FACTOR)
-X_test, y_test = _ensure_input_target(X_test, y_test, UPSCALE_FACTOR)
+#X_train, y_train = _ensure_input_target(X_train, y_train, UPSCALE_FACTOR)
+#X_test, y_test = _ensure_input_target(X_test, y_test, UPSCALE_FACTOR)
 
 train_dataset = torch.utils.data.TensorDataset(torch.tensor(X_train, dtype=torch.float32), torch.tensor(y_train, dtype=torch.float32))
 test_dataset = torch.utils.data.TensorDataset(torch.tensor(X_test, dtype=torch.float32), torch.tensor(y_test, dtype=torch.float32))
@@ -132,9 +133,10 @@ test_dataset = torch.utils.data.TensorDataset(torch.tensor(X_test, dtype=torch.f
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
-optimizer = torch.optim.Adam(model.parameters(), lr=3e-4, weight_decay=1e-5)
-#criterion = nn.MSELoss()
-criterion = SpectralLoss(alpha=0.8)  # Increase spectral loss weight
+optimizer = torch.optim.Adam(model.parameters(), lr=3e-4) #, weight_decay=1e-5)
+criterion = nn.MSELoss()
+#criterion = SpectralLoss(alpha=0.8)  # Increase spectral loss weight
+
 num_epochs = NUM_EPOCHS
 
 print("Starting training...")
@@ -163,7 +165,7 @@ for epoch in range(num_epochs):
             'optimizer_state_dict': optimizer.state_dict(),
             'loss': criterion.state_dict(),
         }
-        torch.save(checkpoint, f'checkpoint_epoch_{epoch+1}.pth')
+        torch.save(checkpoint, f'checkpoint_V_1_5_{epoch+1}.pth')
 
 
 summary(model)
