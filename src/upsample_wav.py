@@ -1,17 +1,3 @@
-"""Run inference on a WAV file using a trained TFiLM model.
-Usage (Linux/Mac):
-    python src/upsample_wav.py --model path/to/model.pth --wav input.wav --out output
-Usage (PowerShell):
-    python .\src\upsample_wav.py --model checkpoint.pth --wav input.wav --out out_prefix
-
-This script:
-- Loads the model architecture from `src/model_ds_v2.py`
-- Loads weights from a checkpoint
-- Loads `input.wav` (resamples if necessary)
-- Produces a low-res version (decimated) and saves it as `<out> .lr.wav`
-- Runs the model to generate a prediction and saves `<out>.pr.wav` and `<out>.hr.wav`
-- Also saves spectrogram PNGs alongside the audio files
-"""
 import os
 import argparse
 from pathlib import Path
@@ -26,6 +12,19 @@ from utils import get_spectrum, save_spectrum
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
+# Run inference on a WAV file using a trained TFiLM model.
+# Usage (Linux/Mac):
+#     python src/upsample_wav.py --model path/to/model.pth --wav input.wav --out output
+# Usage (PowerShell):
+#     python .\src\upsample_wav.py --model checkpoint.pth --wav input.wav --out out_prefix
+
+# This script:
+# - Loads the model architecture from `src/model_ds_v2.py`
+# - Loads weights from a checkpoint
+# - Loads `input.wav` (resamples if necessary)
+# - Produces a low-res version (decimated) and saves it as `<out> .lr.wav`
+# - Runs the model to generate a prediction and saves `<out>.pr.wav` and `<out>.hr.wav`
+# - Also saves spectrogram PNGs alongside the audio files
 
 def plot_comparison(signals, srs, names, out_path, duration=3.0):
     """Plot waveform and spectrogram comparisons.

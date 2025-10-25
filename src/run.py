@@ -103,9 +103,9 @@ for epoch in range(num_epochs):
     
     end_time = time.time()
     
-    print(f"Epoch {epoch+1:02d}/{num_epochs:02d} | "
-          f"Train Loss: {train_loss:.4f} | "
-          f"Test Loss: {test_loss:.4f} | "
+    print(f"Epoch {epoch+1:02d}/{num_epochs:03d} | "
+          f"Train Loss: {train_loss} | "
+          f"Test Loss: {test_loss} | "
           f"Time: {end_time - start_time:.2f}s")
 
 print("Training finished.")
@@ -113,4 +113,4 @@ print("Training finished.")
 # summary(model)
 
 # (Optional: save the model)
-torch.save(model.state_dict(), 'tfilm_superres_quality_model.pth')
+torch.save(model.state_dict(), 'model.pth')
