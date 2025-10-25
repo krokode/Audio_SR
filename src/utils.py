@@ -79,7 +79,8 @@ def upsample_wav(wav, args, model):
     save_spectrum(S, outfile=outname + '.lr.png')
 
 def get_spectrum(x, n_fft=2048):
-    S = librosa.stft(x, n_fft)
+    S = librosa.stft(y=x, n_fft=n_fft)
+    # S = librosa.stft(x, n_fft)
     p = np.angle(S)
     S = np.log1p(np.abs(S))
     return S

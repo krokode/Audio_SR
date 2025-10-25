@@ -110,7 +110,15 @@ for epoch in range(num_epochs):
 
 print("Training finished.")
 
-# summary(model)
+summary(model)
+# torch.save(model.state_dict(), 'model.pth')
 
 # (Optional: save the model)
-torch.save(model.state_dict(), 'model.pth')
+checkpoint = {
+    'epoch': epoch,
+    'model_state_dict': model.state_dict(),
+    'optimizer_state_dict': optimizer.state_dict(),
+    'loss': criterion.state_dict(),
+}
+
+torch.save(checkpoint, f'model_{epoch}.pth')

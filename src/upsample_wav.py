@@ -1,12 +1,14 @@
 import os
 import argparse
 from pathlib import Path
+from xml.parsers.expat import model
 import numpy as np
 import torch
 import soundfile as sf
 import librosa
 import librosa.display
 import matplotlib.pyplot as plt
+from torchinfo import summary
 from model_ds_v2 import create_tfilm_super_resolution
 from utils import get_spectrum, save_spectrum
 
@@ -66,8 +68,64 @@ def plot_comparison(signals, srs, names, out_path, duration=3.0):
 
 
 def load_model(checkpoint_path, upscale_factor=4, quality_mode=True):
-    model = create_tfilm_super_resolution(upscale_factor=upscale_factor, quality_mode=quality_mode)
-    model.load_state_dict(torch.load(checkpoint_path, map_location=DEVICE))
+    """Load trained model from checkpoint."""
+    # Create model as it was during training
+    model = create_tfilm_super_resolution(
+        upscale_factor=upscale_factor,
+        quality_mode=quality_mode,
+        base_channels=64,
+        tfilm_hidden_size=128,
+        block_size=256
+    )
+    
+    summary(model)
+    
+    # Load checkpoint file
+    ckpt = torch.load(checkpoint_path, map_location=DEVICE)
+    
+    # Normalize to a state_dict mapping
+    if isinstance(ckpt, dict) and 'state_dict' in ckpt:
+        state_dict = ckpt['state_dict']
+        print("Checkpoint contains 'state_dict' key; using that for loading.")
+        print("Loaded state_dict keys:", state_dict.keys())
+    elif isinstance(ckpt, dict):
+        state_dict = ckpt
+        print("Checkpoint does not contain 'state_dict' key; using raw checkpoint.")
+        print("Loaded state_dict keys:", state_dict.keys())
+    else:
+        raise TypeError(f"Unexpected checkpoint object type: {type(ckpt)}")
+
+    # Try strict load first
+    try:
+        model.load_state_dict(state_dict)
+        print("Checkpoint loaded (strict).")
+    except Exception as exc:
+        # Strict load failed - attempt a filtered partial load
+        print("Strict load failed:", exc)
+        print("Attempting partial load of matching parameters...")
+
+        model_sd = model.state_dict()
+        filtered = {}
+        skipped = []
+
+        for k, v in state_dict.items():
+            if k in model_sd:
+                if tuple(v.shape) == tuple(model_sd[k].shape):
+                    filtered[k] = v
+                else:
+                    skipped.append((k, tuple(v.shape), tuple(model_sd[k].shape)))
+            else:
+                skipped.append((k, 'unexpected_in_checkpoint', None))
+
+        # Load filtered params non-strictly
+        model.load_state_dict(filtered, strict=False)
+
+        print(f"Partially loaded {len(filtered)} parameters; skipped {len(skipped)} entries.")
+        if len(skipped) > 0:
+            print("Skipped examples (name, ckpt_shape, model_shape):")
+            for s in skipped[:16]:
+                print(" ", s)
+
     model.to(DEVICE)
     model.eval()
     return model
@@ -102,7 +160,13 @@ def process_wav(model, wav_path, out_prefix, sr=16000, r=4, patch_size=8192):
 
     # Upsample x_lr to match y_pred's length for summing
     x_lr_upsampled = librosa.resample(x_lr, orig_sr=fs//r, target_sr=fs)
-    x_lr_upsampled = x_lr_upsampled[:len(y_pred)]  # Ensure same length
+    # Adjust length to match y_pred (resampling can introduce off-by-one differences)
+    desired_len = len(y_pred)
+    if len(x_lr_upsampled) < desired_len:
+        pad_len = desired_len - len(x_lr_upsampled)
+        x_lr_upsampled = np.pad(x_lr_upsampled, (0, pad_len), mode='constant')
+    elif len(x_lr_upsampled) > desired_len:
+        x_lr_upsampled = x_lr_upsampled[:desired_len]
     
     # Create summed versions (normalize to prevent clipping)
     # Sum 1: LR + PR (Enhancement added to input)
