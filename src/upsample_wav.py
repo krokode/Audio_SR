@@ -66,7 +66,7 @@ def plot_comparison(signals, srs, names, out_path, duration=3.0):
     plt.close()
 
 
-def load_model(checkpoint_path, upscale_factor=4, quality_mode=False):
+def load_model(checkpoint_path, upscale_factor=4, quality_mode=True):
     model = create_tfilm_super_resolution(upscale_factor=upscale_factor, quality_mode=quality_mode)
     model.load_state_dict(torch.load(checkpoint_path, map_location=DEVICE))
     model.to(DEVICE)
