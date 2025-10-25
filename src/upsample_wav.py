@@ -1,7 +1,6 @@
 import os
 import argparse
 from pathlib import Path
-from xml.parsers.expat import model
 import numpy as np
 import torch
 import soundfile as sf
@@ -83,6 +82,13 @@ def load_model(checkpoint_path, upscale_factor=4, quality_mode=True):
     # Load checkpoint file
     ckpt = torch.load(checkpoint_path, map_location=DEVICE)
     
+    # Print model parameters to verify architecture
+    print("\nModel parameter check:")
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"Total parameters: {total_params:,}")
+    print(f"Trainable parameters: {trainable_params:,}\n")
+    
     # Normalize to a state_dict mapping
     if isinstance(ckpt, dict) and 'state_dict' in ckpt:
         state_dict = ckpt['state_dict']
@@ -100,6 +106,13 @@ def load_model(checkpoint_path, upscale_factor=4, quality_mode=True):
         model.load_state_dict(state_dict)
         print("Checkpoint loaded (strict).")
         print("Model Loaded all parameters successfully.")
+        
+        # Check weights statistics
+        print("\nWeight statistics:")
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                print(f"{name}: mean={param.data.mean():.3e}, std={param.data.std():.3e}, "
+                      f"min={param.data.min():.3e}, max={param.data.max():.3e}")
         summary(model)        
     except Exception as exc:
         # Strict load failed - attempt a filtered partial load
@@ -143,7 +156,7 @@ def normalize(x):
         return x / max_val
     return x
 
-def process_wav(model, wav_path, out_prefix, sr=16000, r=4, patch_size=8192, normalize_input=True):
+def process_wav(model, wav_path, out_prefix, sr=16000, r=4, patch_size=8192, normalize_input=False):
     if normalize_input:
         print("Normalizing input audio...")
         x_hr, fs = librosa.load(wav_path, sr=sr)
@@ -152,12 +165,17 @@ def process_wav(model, wav_path, out_prefix, sr=16000, r=4, patch_size=8192, nor
         # Load high-res waveform
         x_hr, fs = librosa.load(wav_path, sr=sr)
 
+    # Store original length for final cropping
+    original_length = len(x_hr)
+    print(f"Original audio length: {original_length} samples")
+
     # Create low-res by decimating
     x_lr = librosa.resample(x_hr, orig_sr=fs, target_sr=fs//r)
 
     # Pad to multiple of patch_size
     pad_len = (patch_size - (len(x_hr) % patch_size)) % patch_size
     x_hr_padded = np.pad(x_hr, (0, pad_len), mode='constant')
+    print(f"Padded length: {len(x_hr_padded)} samples (added {pad_len} samples)")
 
     # Downsample padded to create model input
     x_lr_padded = librosa.resample(x_hr_padded, orig_sr=fs, target_sr=fs//r)
@@ -170,20 +188,29 @@ def process_wav(model, wav_path, out_prefix, sr=16000, r=4, patch_size=8192, nor
         y_pred = model(x_input)
     y_pred = y_pred.cpu().numpy().flatten()
 
-    # Crop predicted to original length
-    y_pred = y_pred[:len(x_hr_padded)]
-    x_hr_padded = x_hr_padded[:len(y_pred)]
-    x_lr = x_lr[:len(y_pred)//r]
+    # Check if we're in quality mode (output same length as input)
+    is_quality_mode = len(y_pred) == len(x_input.squeeze())
+    print(f"Model running in {'quality' if is_quality_mode else 'upscale'} mode")
+    
+    # Add diagnostics about the prediction
+    print("\nModel output statistics:")
+    print(f"Input range: [{x_input.min():.3f}, {x_input.max():.3f}]")
+    print(f"Prediction range: [{y_pred.min():.3f}, {y_pred.max():.3f}]")
+    print(f"Mean absolute difference: {np.mean(np.abs(y_pred - x_input.cpu().numpy().flatten())):.3e}")
+    print(f"Max absolute difference: {np.max(np.abs(y_pred - x_input.cpu().numpy().flatten())):.3e}\n")
+    
+    if is_quality_mode:
+        # In quality mode, upsample the prediction to match original sample rate
+        y_pred = librosa.resample(y_pred, orig_sr=fs//r, target_sr=fs)
+        
+    # Crop all signals to original length
+    y_pred = y_pred[:original_length]
+    x_hr_padded = x_hr_padded[:original_length]
+    x_lr = x_lr[:original_length//r]  # Keep proportional length for LR
 
     # Upsample x_lr to match y_pred's length for summing
     x_lr_upsampled = librosa.resample(x_lr, orig_sr=fs//r, target_sr=fs)
-    # Adjust length to match y_pred (resampling can introduce off-by-one differences)
-    desired_len = len(y_pred)
-    if len(x_lr_upsampled) < desired_len:
-        pad_len = desired_len - len(x_lr_upsampled)
-        x_lr_upsampled = np.pad(x_lr_upsampled, (0, pad_len), mode='constant')
-    elif len(x_lr_upsampled) > desired_len:
-        x_lr_upsampled = x_lr_upsampled[:desired_len]
+    x_lr_upsampled = x_lr_upsampled[:len(y_pred)]  # Ensure same length
     
     # Create summed versions (normalize to prevent clipping)
     # Sum 1: LR + PR (Enhancement added to input)
@@ -242,8 +269,8 @@ def main():
     parser.add_argument('--patch_size', type=int, default=8192)
     args = parser.parse_args()
 
-    model = load_model(args.model, upscale_factor=args.r, quality_mode=False)
-    process_wav(model, args.wav, args.out, sr=args.sr, r=args.r, patch_size=args.patch_size)
+    model = load_model(args.model, upscale_factor=args.r, quality_mode=True)  # Match training configuration
+    process_wav(model, args.wav, args.out, sr=args.sr, r=args.r, patch_size=args.patch_size, normalize_input=True)
 
 
 if __name__ == '__main__':

@@ -5,6 +5,7 @@ from utils import load_h5, upsample_wav, load_full_files
 from tqdm import tqdm
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 from torchinfo import summary
 from traintest import train_epoch, test_epoch
@@ -22,6 +23,28 @@ NUM_EPOCHS = 50
 root_dir = Path(__file__).parent.parent  # Get project root directory
 train_file_path = root_dir / 'data' / 'vctk' / 'speaker1' / 'vctk-speaker1-train.4.16000.8192.4096.h5'      # Path to training data
 test_file_path = root_dir / 'data' / 'vctk' / 'speaker1' / 'vctk-speaker1-val.4.16000.8192.4096.h5.tmp'     # Path to test data
+
+# Custom loss that combines MSE with frequency domain loss
+class SpectralLoss(nn.Module):
+    def __init__(self, alpha=0.5):
+        super().__init__()
+        self.alpha = alpha
+    
+    def forward(self, y_pred, y_true):
+        # Time domain loss (MSE)
+        mse_loss = F.mse_loss(y_pred, y_true)
+        
+        # Frequency domain loss
+        y_pred_fft = torch.stft(y_pred.squeeze(1), n_fft=512, hop_length=256, 
+                               win_length=512, return_complex=True)
+        y_true_fft = torch.stft(y_true.squeeze(1), n_fft=512, hop_length=256, 
+                               win_length=512, return_complex=True)
+        
+        # Magnitude loss in frequency domain
+        spec_loss = F.mse_loss(y_pred_fft.abs(), y_true_fft.abs())
+        
+        # Combined loss
+        return (1 - self.alpha) * mse_loss + self.alpha * spec_loss
 
 def _ensure_input_target(X, Y, upscale):
     """Validate and prepare input/target pairs for super-resolution training.
@@ -86,8 +109,8 @@ train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
-criterion = nn.MSELoss()
-
+#criterion = nn.MSELoss()
+criterion = SpectralLoss(alpha=0.5)
 num_epochs = NUM_EPOCHS
 
 print("Starting training...")
