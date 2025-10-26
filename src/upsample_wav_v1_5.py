@@ -79,18 +79,9 @@ def load_model(checkpoint_path, upscale_factor=6, quality_mode=False):
         tfilm_hidden_size=128,
         block_size=256
     )
-    print("Model Initial architecture:")
-    summary(model)
     
     # Load checkpoint file
     ckpt = torch.load(checkpoint_path, map_location=DEVICE)
-    
-    # Print model parameters to verify architecture
-    print("\nModel parameter check:")
-    total_params = sum(p.numel() for p in model.parameters())
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-    print(f"Total parameters: {total_params:,}")
-    print(f"Trainable parameters: {trainable_params:,}\n")
     
     # Normalize to a state_dict mapping
     if isinstance(ckpt, dict) and 'model_state_dict' in ckpt:
@@ -109,13 +100,6 @@ def load_model(checkpoint_path, upscale_factor=6, quality_mode=False):
         model.load_state_dict(state_dict)
         print("Checkpoint loaded (strict).")
         print("Model Loaded all parameters successfully.")
-        
-        # Check weights statistics
-        print("\nWeight statistics:")
-        for name, param in model.named_parameters():
-            if param.requires_grad:
-                print(f"{name}: mean={param.data.mean():.3e}, std={param.data.std():.3e}, "
-                      f"min={param.data.min():.3e}, max={param.data.max():.3e}")
         summary(model)        
     except Exception as exc:
         # Strict load failed - attempt a filtered partial load
@@ -159,7 +143,7 @@ def normalize(x):
         return x / max_val
     return x
 
-def process_wav(model, wav_path, out_prefix, sr=16000, r=UPSCALE_FACTOR, patch_size=8192, normalize_input=False):
+def process_wav(model, wav_path, lr_wav_path, out_prefix, sr=16000, r=UPSCALE_FACTOR, patch_size=8192, normalize_input=False):
     if normalize_input:
         print("Normalizing input audio...")
         x_hr, fs = librosa.load(wav_path, sr=sr)
@@ -172,55 +156,19 @@ def process_wav(model, wav_path, out_prefix, sr=16000, r=UPSCALE_FACTOR, patch_s
     original_length = len(x_hr)
     print(f"Original audio length: {original_length} samples")
 
-    # Create low-res by decimating
-    x_lr = librosa.resample(x_hr, orig_sr=fs, target_sr=fs//r)
-
-    # Pad to multiple of patch_size
-    pad_len = (patch_size - (len(x_hr) % patch_size)) % patch_size
-    x_hr_padded = np.pad(x_hr, (0, pad_len), mode='constant')
-    print(f"Padded length: {len(x_hr_padded)} samples (added {pad_len} samples)")
-
-    # Downsample padded to create model input
-    x_lr_padded = librosa.resample(x_hr_padded, orig_sr=fs, target_sr=fs//r)
+    # load prepared low-res file
+    x_lr, fs_lr = librosa.load(lr_wav_path, sr=sr)
 
     # Prepare model input shape: (batch, channels, seq_len)
-    x_input = torch.tensor(x_lr_padded, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(DEVICE)
+    x_input = torch.tensor(x_lr, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(DEVICE)
 
     # Run model (may need to chop if very long)
     with torch.no_grad():
         y_pred = model(x_input)
     y_pred = y_pred.cpu().numpy().flatten()
 
-    # Check if we're in quality mode (output same length as input)
-    is_quality_mode = len(y_pred) == len(x_input.squeeze())
-    print(f"Model running in {'quality' if is_quality_mode else 'upscale'} mode")
-
-    # Add diagnostics about the prediction
-    print("\nModel output statistics:")
-    print(f"Input range: [{x_input.min():.3f}, {x_input.max():.3f}]")
-    print(f"Prediction range: [{y_pred.min():.3f}, {y_pred.max():.3f}]")
-
-    if is_quality_mode:
-        # In quality mode, upsample the prediction to match original sample rate
-        y_pred = librosa.resample(y_pred, orig_sr=fs//r, target_sr=fs)
-        
     # Crop all signals to original length
     y_pred = y_pred[:original_length]
-    x_hr_padded = x_hr_padded[:original_length]
-    x_lr = x_lr[:original_length//r]  # Keep proportional length for LR
-
-    # Upsample x_lr to match y_pred's length for summing
-    x_lr_upsampled = librosa.resample(x_lr, orig_sr=fs//r, target_sr=fs)
-    x_lr_upsampled = x_lr_upsampled[:len(y_pred)]  # Ensure same length
-    
-    # Create summed versions (normalize to prevent clipping)
-    # Sum 1: LR + PR (Enhancement added to input)
-    y_sum_lr = y_pred + x_lr_upsampled
-    y_sum_lr = y_sum_lr / np.max(np.abs(y_sum_lr))
-    
-    # Sum 2: HR + PR (Enhancement added to reference)
-    y_sum_hr = y_pred + x_hr_padded[:len(y_pred)]
-    y_sum_hr = y_sum_hr / np.max(np.abs(y_sum_hr))
 
     # Convert output prefix to Path object first
     out_prefix = Path(out_prefix)
@@ -234,36 +182,30 @@ def process_wav(model, wav_path, out_prefix, sr=16000, r=UPSCALE_FACTOR, patch_s
     base_name = out_prefix.name
 
     # Save all audio files into the visualization target directory
-    sf.write(str(viz_target / (base_name + '.lr.wav')), x_lr, int(fs / r))
-    sf.write(str(viz_target / (base_name + '.hr.wav')), x_hr_padded, fs)
+    sf.write(str(viz_target / (base_name + '.lr.wav')), x_lr, fs_lr)
+    sf.write(str(viz_target / (base_name + '.hr.wav')), x_hr, fs)
     sf.write(str(viz_target / (base_name + '.pr.wav')), y_pred, fs)
-    sf.write(str(viz_target / (base_name + '.sum_lr.wav')), y_sum_lr, fs)  # LR + PR
-    sf.write(str(viz_target / (base_name + '.sum_hr.wav')), y_sum_hr, fs)  # HR + PR
-
+   
     # Create comparison visualization (saved inside viz_target)
-    signals = [x_hr_padded, x_lr_upsampled, y_pred, y_sum_lr, y_sum_hr]
-    srs = [fs] * 5
-    names = ['Original (HR)', 'Input (LR)', 'Predicted (PR)', 
-             'Combined (LR+PR)', 'Combined (HR+PR)']
+    signals = [x_hr, x_lr, y_pred]
+    srs = [fs] * 3
+    names = ['Original (HR)', 'Input (LR)', 'Predicted (PR)']
     plot_comparison(signals, srs, names, str(viz_target / (base_name + '.comparison.png')))
 
     # Save individual spectrograms inside viz_target
     S_pr = get_spectrum(y_pred)
     save_spectrum(S_pr, outfile=str(viz_target / (base_name + '.pr.png')))
-    S_hr = get_spectrum(x_hr_padded)
+    S_hr = get_spectrum(x_hr)
     save_spectrum(S_hr, outfile=str(viz_target / (base_name + '.hr.png')))
-    S_sum_lr = get_spectrum(y_sum_lr)
-    save_spectrum(S_sum_lr, outfile=str(viz_target / (base_name + '.sum_lr.png')))
-    S_sum_hr = get_spectrum(y_sum_hr)
-    save_spectrum(S_sum_hr, outfile=str(viz_target / (base_name + '.sum_hr.png')))
-    S_lr = get_spectrum(x_lr_upsampled)
+    S_lr = get_spectrum(x_lr)
     save_spectrum(S_lr, outfile=str(viz_target / (base_name + '.lr.png')))
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', required=True, help='Path to model checkpoint (.pth)')
-    parser.add_argument('--wav', required=True, help='Input WAV file')
+    parser.add_argument('--wav', required=True, help='Input HR WAV file')
+    parser.add_argument('--lr_wav', required=True, help='Input LR WAV file')
     parser.add_argument('--out', required=True, help='Output prefix for saved files')
     parser.add_argument('--sr', type=int, default=16000, help='Target sample rate')
     parser.add_argument('--r', type=int, default=UPSCALE_FACTOR, help='Downsampling ratio (upsample factor)')
@@ -271,7 +213,7 @@ def main():
     args = parser.parse_args()
 
     model = load_model(args.model, upscale_factor=args.r, quality_mode=QUALITY_MODE)  # Match training configuration
-    process_wav(model, args.wav, args.out, sr=args.sr, r=args.r, patch_size=args.patch_size, normalize_input=NORMALIZE_INPUT)
+    process_wav(model, args.wav, args.lr_wav, args.out, sr=args.sr, r=args.r, patch_size=args.patch_size, normalize_input=NORMALIZE_INPUT)
 
 
 if __name__ == '__main__':

@@ -1,7 +1,3 @@
-"""
-Create an HDF5 file of patches for training super-resolution model.
-"""
-
 import os, argparse
 import numpy as np
 import h5py
@@ -11,6 +7,7 @@ from scipy import interpolate
 from scipy.signal import decimate
 from scipy.signal import butter, lfilter
 import re
+import soundfile as sf
 
 parser = argparse.ArgumentParser()
 
@@ -44,7 +41,7 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
     return y
 
 
-def add_data(h5_file, inputfiles, args, save_examples=False):
+def add_data(h5_file, inputfiles, args, save_examples=False, save_lowres=False):
     # Make a list of all files to be processed
     file_list = []
     ID_list = []
@@ -95,6 +92,13 @@ def add_data(h5_file, inputfiles, args, save_examples=False):
         else:
             assert len(x) % args.scale == 0
             assert len(x_lr) == len(x) / args.scale
+
+        # ✅ save LR audio
+        if save_lowres:
+            filename = os.path.basename(file_path)
+            name, ext = os.path.splitext(filename)
+            out_path = os.path.join(args.out_dir, f"{name}_LR{ext}")
+            sf.write(out_path, x_lr, int(fs / args.scale))
 
         if args.dimension != -1:
             # generate patches
@@ -169,6 +173,8 @@ def upsample(x_lr, r):
     return x_sp
 
 if __name__ == '__main__':
+    args.out_dir = 'lr_wav/files'
+    os.makedirs(args.out_dir, exist_ok=True)
     # create train or test h5 file
     with h5py.File(args.out, 'w') as f:
-        add_data(f, args.file_list, args, save_examples=False)
+        add_data(f, args.file_list, args, save_examples=False, save_lowres=True)
