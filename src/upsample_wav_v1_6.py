@@ -8,12 +8,12 @@ import librosa
 import librosa.display
 import matplotlib.pyplot as plt
 from torchinfo import summary
-from model_ds_v1_5 import create_tfilm_super_resolution
+from model_ds_v1_6 import create_tfilm_super_resolution
 from utils import get_spectrum, save_spectrum
 
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-NORMALIZE_INPUT = False  # Whether to normalize input audio to [-1, 1]
-QUALITY_MODE = False  # Whether the model is in quality enhancement mode (output same length as input)
+NORMALIZE_INPUT = True  # Whether to normalize input audio to [-1, 1]
+QUALITY_MODE = True  # Whether the model is in quality enhancement mode (output same length as input)
 UPSCALE_FACTOR = 4
 
 # Run inference on a WAV file using a trained TFiLM model.
@@ -71,7 +71,7 @@ def plot_comparison(signals, srs, names, out_path, duration=3.0):
 
 def load_model(checkpoint_path, upscale_factor=6, quality_mode=False):
     """Load trained model from checkpoint."""
-    # Create model as it was during training
+    # Instanciate model as it was during training
     model = create_tfilm_super_resolution(
         upscale_factor=upscale_factor,
         quality_mode=quality_mode,
@@ -87,11 +87,9 @@ def load_model(checkpoint_path, upscale_factor=6, quality_mode=False):
     if isinstance(ckpt, dict) and 'model_state_dict' in ckpt:
         state_dict = ckpt['model_state_dict']
         print("Checkpoint contains 'model_state_dict' key; using that for loading.")
-        print("Loaded state_dict keys:", state_dict.keys())
     elif isinstance(ckpt, dict):
         state_dict = ckpt
         print("Checkpoint does not contain 'model_state_dict' key; using raw checkpoint.")
-        print("Loaded state_dict keys:", state_dict.keys())
     else:
         raise TypeError(f"Unexpected checkpoint object type: {type(ckpt)}")
 
@@ -143,35 +141,58 @@ def normalize(x):
         return x / max_val
     return x
 
-def process_wav(model, wav_path, lr_wav_path, out_prefix, sr=16000, r=UPSCALE_FACTOR, patch_size=8192, normalize_input=False):
+def process_wav(model, wav_path, out_prefix, sr=16000, r=UPSCALE_FACTOR, patch_size=8192, normalize_input=True):
     if normalize_input:
-        print("Normalizing input audio...")
+        print("Normalizing hr input audio...")
         x_hr, fs = librosa.load(wav_path, sr=sr)
         x_hr = normalize(x_hr)
     else:
         # Load high-res waveform
         x_hr, fs = librosa.load(wav_path, sr=sr)
 
+    # This mimics the training data (blurry_N, sharp_N)
+    fs_lr_target = fs // r
+    print(f"Generating LR input by downsampling to {fs_lr_target}Hz and upsampling back to {fs}Hz...")
+
+    # Downsample x_hr (decimate) to get lr
+    x_lr_down = librosa.resample(x_hr, orig_sr=fs, target_sr=fs_lr_target)
+
+    # Upsample (interpolate) back to original sample rate
+    # This creates the "blurry" input for the quality enhancement model
+    x_lr = librosa.resample(x_lr_down, orig_sr=fs_lr_target, target_sr=fs)
+
+    # Ensure generated LR audio has same sample rate and approx length
+    fs_lr = fs 
+    
+    # Pad/trim x_lr to match x_hr length exactly
+    hr_len = len(x_hr)
+    lr_len = len(x_lr)
+    if hr_len > lr_len:
+        x_lr = np.pad(x_lr, (0, hr_len - lr_len))
+    elif lr_len > hr_len:
+        x_lr = x_lr[:hr_len]
+
     # Store original length for final cropping
     original_length = len(x_hr)
-    print(f"Original audio length: {original_length} samples")
+    print(f"Original audio length: {original_length} samples")    
 
-    # load prepared low-res file
-    x_lr, fs_lr = librosa.load(lr_wav_path, sr=None)  # keep native SR
-    if fs_lr != sr:
-        x_lr = librosa.resample(x_lr, orig_sr=fs_lr, target_sr=sr)
-
-
-    # Prepare model input shape: (batch, channels, seq_len)
+    # Prepare low-res for model input
     x_input = torch.tensor(x_lr, dtype=torch.float32).unsqueeze(0).unsqueeze(0).to(DEVICE)
 
-    # Run model (may need to chop if very long)
+    # Run model
+    print("Running model inference...")
     with torch.no_grad():
         y_pred = model(x_input)
-    y_pred = y_pred.cpu().numpy().flatten()
-
-    # Crop all signals to original length
-    y_pred = y_pred[:original_length]
+    
+    # Crop and flatten predicted audio
+    # In Quality Mode, model output length should match input length
+    y_pred = y_pred.squeeze().cpu().numpy()
+    
+    # Final check to ensure exact length match with HR target
+    if len(y_pred) > original_length:
+        y_pred = y_pred[:original_length]
+    elif len(y_pred) < original_length:
+        y_pred = np.pad(y_pred, (0, original_length - len(y_pred)))
 
     # Convert output prefix to Path object first
     out_prefix = Path(out_prefix)
@@ -208,7 +229,6 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', required=True, help='Path to model checkpoint (.pth)')
     parser.add_argument('--wav', required=True, help='Input HR WAV file')
-    parser.add_argument('--lr_wav', required=True, help='Input LR WAV file')
     parser.add_argument('--out', required=True, help='Output prefix for saved files')
     parser.add_argument('--sr', type=int, default=16000, help='Target sample rate')
     parser.add_argument('--r', type=int, default=UPSCALE_FACTOR, help='Downsampling ratio (upsample factor)')
@@ -216,7 +236,7 @@ def main():
     args = parser.parse_args()
 
     model = load_model(args.model, upscale_factor=args.r, quality_mode=QUALITY_MODE)  # Match training configuration
-    process_wav(model, args.wav, args.lr_wav, args.out, sr=args.sr, r=args.r, patch_size=args.patch_size, normalize_input=NORMALIZE_INPUT)
+    process_wav(model, args.wav, args.out, sr=args.sr, r=args.r, patch_size=args.patch_size, normalize_input=NORMALIZE_INPUT)
 
 
 if __name__ == '__main__':

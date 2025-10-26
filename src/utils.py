@@ -36,6 +36,7 @@ def load_full_files():
 def load_h5(h5_path):
     # load training/test data
     with h5py.File(h5_path, 'r') as hf:
+        print(f"utils.py: load_h5() Loading data from {h5_path}")
         print('List of arrays in input file:', list(hf.keys()))
         X = np.array(hf.get('data'))
         Y = np.array(hf.get('label'))
