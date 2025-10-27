@@ -3,34 +3,45 @@
 git clone https://github.com/krokode/Audio_SR.git
 cd AUDIO_SR
 ```
+
 2. Create virtual environment and install required packages
 ```
 pip install -r requirements.txt
 ```
+
 3. Data for training load and extract
 ```
 cd data/vctk
 python3 arc_load_unpack.py
 ```
-4. Preprocess extracted data
+
+4. Preprocess extracted data it will create dataset files h5 in /speaker1
+Source wav files taken only from ./data/vctk/VCTK-Corpus/wav48/p225 for 
+faster train experiment.
+Can use folders from p226 to p376 for model improvements
+
 For Linux/MacOS
 ```
 cd speaker1
-makefile.sh
+prepare_h5_train_test.sh
 ```
 For Windows
 ```
-makefile.ps1
+prepare_h5_train_test.ps1
 ```
-5. Train model on H5 files for 50 epochs
+
+5. Train model on H5 files for 150 epochs best model to be saved
 ```
 cd ../../../src
-python3 run.py
+python3 run_v1_6.py
 ```
-6. To train for more epochs edit run.py NUM_EPOCHS variable
-7. There is another option to train model on pickle files
+To train for more epochs edit run_v1_6.py NUM_EPOCHS variable
+
+6. For predictions take any wav file in hi resolution for example p270_002.wav
 ```
-cd ../dev
-python3 run_chunked_v2.py
-```
+python3 upsample_wav_v1_6.py --model best_model_V1_6.pth --wav p270_002.wav --out output_test1
+``` 
+It will create 4 times lower resolution example then pass it though model and create predicted wav file.
+Everything will be saved in /visualizations/output_test1/
+Also spectrogramms to be created for comparison 
 
