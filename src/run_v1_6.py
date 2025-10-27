@@ -142,9 +142,9 @@ criterion = nn.MSELoss()
 num_epochs = NUM_EPOCHS
 
 print("Starting training...")
-best_test_loss = 10.0          # initialize to large value
-patience = 20                  # stop if no improvement after N epochs
-epochs_no_improve = 0          # counter for early stopping
+best_test_loss = float("inf")               # initialize to large value
+patience = 20                               # stop if no improvement after N epochs
+epochs_no_improve = 0                       # counter for early stopping
 best_model_path = "best_model_V1_6.pth"
 
 for epoch in range(num_epochs):
