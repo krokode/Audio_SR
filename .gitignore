@@ -149,7 +149,7 @@ activemq-data/
 
 # Data files
 *.pth
-/vsc_*.*
+/vsc_*
 # src/visualizations/
 /docs/
 /dev/
