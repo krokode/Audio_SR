@@ -150,13 +150,13 @@ activemq-data/
 # Data files
 *.pth
 # src/visualizations/
-docs/
-dev/
-data/vctk/VCTK-Corpus/
-data/vctk/speaker1/full-data*
-data/vctk/speaker1/full-label*
-data/vctk/speaker1/ID_list*
-data/vctk/speaker1/*vctk-speaker1*
+/docs/
+/dev/
+/data/vctk/VCTK-Corpus/
+/data/vctk/speaker1/full-data*
+/data/vctk/speaker1/full-label*
+/data/vctk/speaker1/ID_list*
+/data/vctk/speaker1/*vctk-speaker1*
 
 # virtualenv
 .ASR_venv/
