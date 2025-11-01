@@ -177,7 +177,7 @@ for epoch in range(num_epochs):
             'best_test_loss': best_test_loss
         }
         torch.save(checkpoint, best_model_path)
-        print(f"✅ New best model saved at epoch {epoch+1} with test loss {test_loss:.6f}")
+        print(f"✅ New best model saved at epoch {epoch+1} with test loss {test_loss}")
 
     else:
         epochs_no_improve += 1
