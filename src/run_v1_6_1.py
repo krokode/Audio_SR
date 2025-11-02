@@ -124,9 +124,10 @@ for i, (train, val) in enumerate(zip(train_dataset_list, val_dataset_list)):
     
     # Load previous best model if continuing training
     if os.path.exists(best_model_path):
-        checkpoint = torch.load(best_model_path)
+        checkpoint = torch.load(best_model_path, map_location=DEVICE)
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        best_test_loss = checkpoint['best_test_loss']
         print("Loaded previous best model checkpoint")
 
     best_test_loss = train_model(model, NUM_EPOCHS,
