@@ -160,6 +160,7 @@ activemq-data/
 /data/vctk/speaker1/ID_list*
 /data/vctk/speaker1/*vctk-speaker1*
 /data/vctk/speaker1/Makefile
+/data/vctk/ID_list*
 
 # virtualenv
 .ASR_venv/
