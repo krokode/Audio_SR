@@ -29,13 +29,23 @@ For Windows
 ```
 prepare_h5_train_test.ps1
 ```
+Can use folders from p226 to p376 for model improvements
+```
+cd ..
+prepare_dataset.py
+```
 
 5. Train model on H5 files for 150 epochs best model to be saved
+To train on small dataset
 ```
 cd ../../../src
 python3 run_v1_6.py
 ```
 To train for more epochs edit run_v1_6.py NUM_EPOCHS variable
+To train on multiple datasets
+```
+python3 run_v1_6_1.py
+```
 
 6. For predictions take any wav file in hi resolution for example p270_002.wav
 ```
