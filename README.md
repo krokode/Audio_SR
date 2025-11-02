@@ -1,5 +1,5 @@
 # About
-A PyTorch reproduction of the **Temporal FiLM** (Birnbaum, S., et al., 2019 [NeurIPS]) super-resolution [method](https://github.com/haoheliu/versatile_audio_super_resolution).
+A PyTorch reproduction of the **Temporal FiLM** (Birnbaum, S., et al., 2019 [NeurIPS]) super-resolution [method](https://github.com/kuleshov/audio-super-res).
 
 # Environment
 ## Setup

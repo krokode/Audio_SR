@@ -12,32 +12,31 @@ import time
 from model_ds_v1_6 import TFiLMSuperResolution, create_tfilm_super_resolution
 from traintest import train_epoch, test_epoch
 from utils import load_h5, upsample_wav, load_full_files
+from dataset import VctkWavDataset
 
 
-##########
-# TODO: never use global variables, move into `__main__`
-##########
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-BATCH_SIZE = 64
-UPSCALE_FACTOR = 4
-NUM_EPOCHS = 150
-QUALITY_MODE = True # True if focusing on improving signal quality without changing length
-MODEL_TMP = lambda _: "model_tmp.pth"
-MODEL_BEST = lambda _: "model_best.pth"
-MODEL_CHECKPOINT = lambda _: "some_checkpoint_to_resume_from.pth"
-##########
-##########
 
 
 if __name__ == "__main__":
+    
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    batch_size = 64
+    upscale_factor = 4
+    num_epochs = 150
+    quality_mode = True # True if focusing on improving signal quality without changing length
+    
+    MODEL_TMP = lambda _: "model_tmp.pth"
+    MODEL_BEST = lambda _: "model_best.pth"
+    MODEL_CHECKPOINT = lambda _: "some_checkpoint_to_resume_from.pth"
+    
     # Initialize model in quality improvement mode since input/target have same length
     model = create_tfilm_super_resolution(
-        upscale_factor=UPSCALE_FACTOR,
-        quality_mode=QUALITY_MODE,  
+        upscale_factor=upscale_factor,
+        quality_mode=quality_mode,  
         base_channels=64,
         tfilm_hidden_size=128,
         block_size=256
-    ).to(DEVICE)
+    ).to(device=device)
 
     optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
     criterion = nn.MSELoss()
@@ -61,8 +60,8 @@ if __name__ == "__main__":
 
     # NOTE: will start from the existing checkpoint if `MODEL_SAVE_NAME` exists
     # Load previous best model if continuing training from a saved interrupted checkpoint.
-    if os.path.exists(MODEL_CHECKPOINT()):
-        checkpoint = torch.load(MODEL_CHECKPOINT(), map_location=DEVICE)
+    if os.path.exists(MODEL_CHECKPOINT(None)):
+        checkpoint = torch.load(MODEL_CHECKPOINT(None), map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         best_train_loss = checkpoint['train_loss']
@@ -83,22 +82,22 @@ if __name__ == "__main__":
     # TODO: instantiate a custom `Dataset` class that wrap all the h5 files in a single dataset that can be shuffled internally in batches of `batch_size`
     #       Look at https://github.com/maximyudayev/Realtime-ST-GCN/blob/main/data_prep/dataset.py
     ##########
-    train_dataset =
-    test_dataset =
+    train_dataset = VctkWavDataset(train_dataset_list)
+    test_dataset = VctkWavDataset(test_dataset_list)
     ##########
     ##########
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     for epoch in range(num_epochs):
         # Run one training epoch and step the optimizer
         start_time_train = time.time()
-        train_loss = train_epoch(model, train_loader, optimizer, criterion, DEVICE)
+        train_loss = train_epoch(model, train_loader, optimizer, criterion, device=device)
         end_time_train = time.time()
 
         # Run one testing (validation) epoch
         start_time_test = time.time()
-        test_loss = test_epoch(model, test_loader, criterion, DEVICE)
+        test_loss = test_epoch(model, test_loader, criterion, device=device)
         end_time_test = time.time()
 
         print(f"Epoch {epoch+1}/{num_epochs} | "
@@ -112,7 +111,7 @@ if __name__ == "__main__":
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'loss_fn': criterion.__class__.__name__,
-            'train_loss': train_loss
+            'train_loss': train_loss,
             'test_loss': test_loss
         }
 
