@@ -97,7 +97,7 @@ def train_model(model, num_epochs, optimizer, criterion, device,
             print(f"Best model saved as '{best_model_path}' with loss = {best_test_loss}")
             break
     
-    return best_test_loss, epochs_no_improve
+    return best_test_loss
 
 print("Starting training...")
 best_test_loss = float("inf")               # initialize to large value
@@ -129,11 +129,11 @@ for i, (train, val) in enumerate(zip(train_dataset_list, val_dataset_list)):
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         print("Loaded previous best model checkpoint")
 
-    best_test_loss, epochs_no_improve = train_model(model, NUM_EPOCHS,
-                                                    optimizer, criterion, DEVICE,
-                                                    t_loader, v_loader,
-                                                    best_test_loss, patience,
-                                                    best_model_path, epochs_no_improve)
+    best_test_loss = train_model(model, NUM_EPOCHS,
+                                 optimizer, criterion, DEVICE,
+                                 t_loader, v_loader,
+                                 best_test_loss, patience,
+                                 best_model_path, epochs_no_improve)
 
 print(f"Best model saved as '{best_model_path}' with loss = {best_test_loss}")
 summary(model)
