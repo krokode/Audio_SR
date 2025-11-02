@@ -1,57 +1,79 @@
-1. Clone REPO
-```
+# About
+A PyTorch reproduction of the **Temporal FiLM** (Birnbaum, S., et al., 2019 [NeurIPS]) super-resolution [method](https://github.com/haoheliu/versatile_audio_super_resolution).
+
+# Environment
+## Setup
+### Local
+Clone the project from the desired parent directory on the local device:
+```bash
 git clone https://github.com/krokode/Audio_SR.git
-cd AUDIO_SR
+cd Audio_SR
 ```
 
-2. Create virtual environment and install required packages
-```
-pip install -r requirements.txt
+Setup the software environment:
+
+#### Linux
+```bash
+. setup.sh
+. activate.sh
 ```
 
-3. Data for training load and extract
+#### Windows
+```powershell
+setup.ps1
+activate.ps1
 ```
+
+### VSC Supercomputer
+Clone the project onto the data partition:
+```bash
+cd $VSC_DATA
+git clone https://github.com/krokode/Audio_SR.git
+cd Audio_SR
+```
+
+Setup the software environment:
+```bash
+. vsc_setup_wice.sh
+. vsc_activate_wise.sh
+```
+
+# Datasets
+## Download
+### Local
+```bash
 cd data/vctk
-python3 arc_load_unpack.py
+python arc_load_unpack.py
 ```
 
-4. Preprocess extracted data it will create dataset files h5 in /speaker1
-Source wav files taken only from ./data/vctk/VCTK-Corpus/wav48/p225 for 
-faster train experiment.
-Can use folders from p226 to p376 for model improvements
+### VSC Supercomputer
+Upload [data]("http://www.udialogue.org/download/VCTK-Corpus.tar.gz") with WinSCP to the `$VSC_DATA/Audio_SR/data/vctk` partition.
 
-For Linux/MacOS
-```
-cd speaker1
-prepare_h5_train_test.sh
-```
-For Windows
-```
-prepare_h5_train_test.ps1
-```
-Can use folders from p226 to p376 for model improvements
-```
-cd ..
-prepare_dataset.py
+Unpack the data acrhive:
+```bash
+cd $VSC_DATA/Audio_SR/data/vctk
+tar -xvf VCTK-Corpus.tar.gz
 ```
 
-5. Train model on H5 files for 150 epochs best model to be saved
-To train on small dataset
-```
-cd ../../../src
-python3 run_v1_6.py
-```
-To train for more epochs edit run_v1_6.py NUM_EPOCHS variable
-To train on multiple datasets
-```
-python3 run_v1_6_1.py
+## Prepare
+Preprocess extracted data as h5 files
+
+```bash
+python prepare_dataset.py
 ```
 
-6. For predictions take any wav file in hi resolution for example p270_002.wav
+# Train
+Train model on h5 files for 150 epochs (update NUM_EPOCHS inside `run.py`)
+```bash
+cd ../../src
+python run.py
 ```
-python3 upsample_wav_v1_6.py --model best_model_V1_6.pth --wav p270_002.wav --out output_test1
-``` 
+
+# Visualize
 It will create 4 times lower resolution example then pass it though model and create predicted wav file.
-Everything will be saved in /visualizations/output_test1/
-Also spectrogramms to be created for comparison 
 
+Pass any WAV file in high-resolution, for example p270_002.wav:
+```bash
+python visualize.py --model best_model_V1_6.pth --wav p270_002.wav --out output
+```
+Audio results and spectrograms will be available in `/visualizations/output/`.

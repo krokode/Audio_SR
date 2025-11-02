@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm # Provides a progress bar
 
+
 def train_epoch(model, dataloader, optimizer, criterion, device):
     """
     Trains the model for one epoch.
@@ -60,6 +61,7 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
 
     # Return the average loss for the epoch
     return total_loss / len(dataloader)
+
 
 def test_epoch(model, dataloader, criterion, device):
     """

@@ -1,0 +1,140 @@
+import os
+import numpy as np
+from pathlib import Path
+from tqdm import tqdm
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader, Dataset
+from torchinfo import summary
+import time
+
+from model_ds_v1_6 import TFiLMSuperResolution, create_tfilm_super_resolution
+from traintest import train_epoch, test_epoch
+from utils import load_h5, upsample_wav, load_full_files
+
+
+##########
+# TODO: never use global variables, move into `__main__`
+##########
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+BATCH_SIZE = 64
+UPSCALE_FACTOR = 4
+NUM_EPOCHS = 150
+QUALITY_MODE = True # True if focusing on improving signal quality without changing length
+MODEL_TMP = lambda _: "model_tmp.pth"
+MODEL_BEST = lambda _: "model_best.pth"
+MODEL_CHECKPOINT = lambda _: "some_checkpoint_to_resume_from.pth"
+##########
+##########
+
+
+if __name__ == "__main__":
+    # Initialize model in quality improvement mode since input/target have same length
+    model = create_tfilm_super_resolution(
+        upscale_factor=UPSCALE_FACTOR,
+        quality_mode=QUALITY_MODE,  
+        base_channels=64,
+        tfilm_hidden_size=128,
+        block_size=256
+    ).to(DEVICE)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)
+    criterion = nn.MSELoss()
+
+    print("Starting training...")
+    epochs_no_improve = 0 # counter for early stopping
+    best_train_loss = float("inf") # initialize to large value
+    best_test_loss = float("inf") # initialize to large value
+    patience = 20 # stop if no improvement after N epochs
+
+    ##########
+    # TODO (not critical): cleanup the naming of the files in the dataset preparation stages to avoid messy structure
+    # NOTE: prioritize lowercase naming everywhere (folders, files, etc.) and `_` instead of `-`.
+    ##########
+    root_dir = Path(__file__).parent.parent  # Get project root directory
+    train_file_path_dir = root_dir / 'data' / 'vctk' / 'datasets'
+    train_dataset_list = list(train_file_path_dir.glob('*vctk-speaker1-train.4.16000.8192.4096.h5'))
+
+    test_file_path_dir = root_dir / 'data' / 'vctk' / 'datasets' 
+    test_dataset_list = list(test_file_path_dir.glob('*vctk-speaker1-val.4.16000.8192.4096.h5.tmp'))
+
+    # NOTE: will start from the existing checkpoint if `MODEL_SAVE_NAME` exists
+    # Load previous best model if continuing training from a saved interrupted checkpoint.
+    if os.path.exists(MODEL_CHECKPOINT()):
+        checkpoint = torch.load(MODEL_CHECKPOINT(), map_location=DEVICE)
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        best_train_loss = checkpoint['train_loss']
+        best_test_loss = checkpoint['test_loss']
+        print("Loaded from checkpoint")
+
+    # NOTE: @krokode, this a bad approach for training on different files.
+    #       You are training a model sequentially on each individual dataset, for 150 epochs each, before moving to the next.
+    #       This will bias the model to a dataset it has been learning from most recently.
+    #       Also, don't discard learning by doing a new epoch from the previously best checkpoint, you are biasing the model this way and discarding learning from a subset of the data.
+    # NOTE: Instead:
+    #           1. Combine training files into a single training set (same for test test)
+    #               -> write a proper DataLoader class that combines all separate recordings into a single logical dataset
+    #           2. Replace for-loop over datasets in the `main`, with the for-loop over epochs inside the `train` method
+    #       This change will make sure that your model learns from all recordings in the dataset, before updating its weights on each epoch
+
+    ##########
+    # TODO: instantiate a custom `Dataset` class that wrap all the h5 files in a single dataset that can be shuffled internally in batches of `batch_size`
+    #       Look at https://github.com/maximyudayev/Realtime-ST-GCN/blob/main/data_prep/dataset.py
+    ##########
+    train_dataset =
+    test_dataset =
+    ##########
+    ##########
+    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
+
+    for epoch in range(num_epochs):
+        # Run one training epoch and step the optimizer
+        start_time_train = time.time()
+        train_loss = train_epoch(model, train_loader, optimizer, criterion, DEVICE)
+        end_time_train = time.time()
+
+        # Run one testing (validation) epoch
+        start_time_test = time.time()
+        test_loss = test_epoch(model, test_loader, criterion, DEVICE)
+        end_time_test = time.time()
+
+        print(f"Epoch {epoch+1}/{num_epochs} | "
+            f"Train Loss: {train_loss} | "
+            f"Test Loss: {test_loss} | "
+            f"Train time: {end_time_train - start_time_train:.2f}s"
+            f"Test time: {end_time_test - start_time_test:.2f}s")
+
+        checkpoint = {
+            'epoch': epoch + 1,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'loss_fn': criterion.__class__.__name__,
+            'train_loss': train_loss
+            'test_loss': test_loss
+        }
+
+        torch.save(checkpoint, MODEL_TMP())
+
+        # Check for improvement
+        if test_loss < best_test_loss:
+            best_test_loss = test_loss
+            epochs_no_improve = 0
+
+            # Save the best model checkpoint
+            torch.save(checkpoint, MODEL_BEST())
+            print(f"✅ New best at epoch {epoch+1}\nTrain: {train_loss:.6f}\nTest: {test_loss:.6f}")
+        else:
+            epochs_no_improve += 1
+            print(f"No improvement for {epochs_no_improve} epoch(s).")
+
+        # Early stopping
+        if epochs_no_improve >= patience:
+            print(f"⏹ Early stopping triggered after {epoch+1} epochs.")
+            print(f"Best model saved as '{MODEL_BEST()}' with loss = {best_test_loss}")
+            break
+
+    print(f"Best model saved as '{MODEL_BEST()}'\nTrain loss: {best_train_loss}\nTest loss: {best_test_loss}")
+    print("Experiment finished.")
