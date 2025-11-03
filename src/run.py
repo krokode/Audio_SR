@@ -15,19 +15,16 @@ from utils import load_h5, upsample_wav, load_full_files
 from dataset import VctkWavDataset
 
 
-
-
 if __name__ == "__main__":
-    
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    batch_size = 64
+    batch_size = 64 # 224 // 64 -> batches
     upscale_factor = 4
     num_epochs = 150
     quality_mode = True # True if focusing on improving signal quality without changing length
     
-    MODEL_TMP = lambda _: "model_tmp.pth"
-    MODEL_BEST = lambda _: "model_best.pth"
-    MODEL_CHECKPOINT = lambda _: "some_checkpoint_to_resume_from.pth"
+    MODEL_TMP = lambda: "model_tmp.pth"
+    MODEL_BEST = lambda: "model_best.pth"
+    MODEL_CHECKPOINT = lambda: "some_checkpoint_to_resume_from.pth"
     
     # Initialize model in quality improvement mode since input/target have same length
     model = create_tfilm_super_resolution(
@@ -60,8 +57,8 @@ if __name__ == "__main__":
 
     # NOTE: will start from the existing checkpoint if `MODEL_SAVE_NAME` exists
     # Load previous best model if continuing training from a saved interrupted checkpoint.
-    if os.path.exists(MODEL_CHECKPOINT(None)):
-        checkpoint = torch.load(MODEL_CHECKPOINT(None), map_location=device)
+    if os.path.exists(MODEL_CHECKPOINT()):
+        checkpoint = torch.load(MODEL_CHECKPOINT(), map_location=device)
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         best_train_loss = checkpoint['train_loss']
