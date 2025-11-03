@@ -83,18 +83,18 @@ if __name__ == "__main__":
     test_dataset = VctkWavDataset(test_dataset_list)
     ##########
     ##########
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
     for epoch in range(num_epochs):
         # Run one training epoch and step the optimizer
         start_time_train = time.time()
-        train_loss = train_epoch(model, train_loader, optimizer, criterion, device=device)
+        train_loss = train_epoch(model, train_loader, batch_size, optimizer, criterion, device=device)
         end_time_train = time.time()
 
         # Run one testing (validation) epoch
         start_time_test = time.time()
-        test_loss = test_epoch(model, test_loader, criterion, device=device)
+        test_loss = test_epoch(model, test_loader, batch_size, criterion, device=device)
         end_time_test = time.time()
 
         print(f"Epoch {epoch+1}/{num_epochs} | "

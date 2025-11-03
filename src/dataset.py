@@ -11,7 +11,7 @@ class VctkWavDataset(Dataset):
         self.list_files = sorted(list_files)
 
     def __len__(self):
-        return len(self.all_data) # Return total number of recordings
+        return len(self.list_files) # Return total number of recordings
 
     def __getitem__(self, idx):
         # Return single recording from list of files

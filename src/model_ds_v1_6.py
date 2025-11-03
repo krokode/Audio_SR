@@ -196,6 +196,7 @@ class TFiLMSuperResolution(nn.Module):
         
     def forward(self, x):
         # x shape: (batch_size, channels, sequence_length)
+        print(f"Input shape: {x.shape}")
         original_length = x.shape[-1]
         
         # Apply initial upscaling if needed

@@ -3,7 +3,7 @@ import torch.nn as nn
 from tqdm import tqdm # Provides a progress bar
 
 
-def train_epoch(model, dataloader, optimizer, criterion, device):
+def train_epoch(model, dataloader, batch_size, optimizer, criterion, device):
     """
     Trains the model for one epoch.
 
@@ -21,7 +21,7 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
     total_loss = 0.0
 
     # Iterate over the training data with a progress bar
-    for inputs, targets in tqdm(dataloader, desc="Training", leave=False):
+    for i, (inputs, targets) in enumerate(tqdm(dataloader, desc="Training", leave=False)):
         # Move data to the specified device
         inputs, targets = inputs.to(device), targets.to(device)
 
@@ -43,8 +43,9 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
         elif targets.dim() == 2:
             targets = targets.unsqueeze(1)
 
-        # Zero the parameter gradients
-        optimizer.zero_grad()
+        if (not (i % batch_size)):
+            # Zero the parameter gradients
+            optimizer.zero_grad()
         
         # Get model outputs
         outputs = model(inputs)
@@ -54,7 +55,9 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
 
         # Backward pass and optimization
         loss.backward()
-        optimizer.step()
+
+        if ((i > 0) and not ((i+1) % batch_size)):
+            optimizer.step()
 
         # Accumulate the loss
         total_loss += loss.item()
@@ -63,7 +66,7 @@ def train_epoch(model, dataloader, optimizer, criterion, device):
     return total_loss / len(dataloader)
 
 
-def test_epoch(model, dataloader, criterion, device):
+def test_epoch(model, dataloader, batch_size, criterion, device):
     """
     Evaluates the model on the test/validation dataset.
 
