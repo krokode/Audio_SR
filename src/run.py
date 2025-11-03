@@ -17,10 +17,13 @@ from dataset import VctkWavDataset
 
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    batch_size = 64 # 224 // 64 -> batches
+    batch_size = 64 # depending on available mamory choose what batch size to use 1, 2, 4, 8, 16, 32, 64, 128
     upscale_factor = 4
     num_epochs = 150
-    quality_mode = True # True if focusing on improving signal quality without changing length
+    quality_mode = True 
+    # True if focusing on improving signal quality without changing length
+    # To use quality_mode = False use upscaled targets 32768 instead of 8192
+    # *vctk-speaker1-train.4.16000.32768.4096.h5' and *vctk-speaker1-val.4.16000.32768.4096.h5.tmp' h5 files
     
     MODEL_TMP = lambda: "model_tmp.pth"
     MODEL_BEST = lambda: "model_best.pth"
@@ -44,10 +47,6 @@ if __name__ == "__main__":
     best_test_loss = float("inf") # initialize to large value
     patience = 20 # stop if no improvement after N epochs
 
-    ##########
-    # TODO (not critical): cleanup the naming of the files in the dataset preparation stages to avoid messy structure
-    # NOTE: prioritize lowercase naming everywhere (folders, files, etc.) and `_` instead of `-`.
-    ##########
     root_dir = Path(__file__).parent.parent  # Get project root directory
     train_file_path_dir = root_dir / 'data' / 'vctk' / 'datasets'
     train_dataset_list = list(train_file_path_dir.glob('*vctk-speaker1-train.4.16000.8192.4096.h5'))
@@ -65,36 +64,21 @@ if __name__ == "__main__":
         best_test_loss = checkpoint['test_loss']
         print("Loaded from checkpoint")
 
-    # NOTE: @krokode, this a bad approach for training on different files.
-    #       You are training a model sequentially on each individual dataset, for 150 epochs each, before moving to the next.
-    #       This will bias the model to a dataset it has been learning from most recently.
-    #       Also, don't discard learning by doing a new epoch from the previously best checkpoint, you are biasing the model this way and discarding learning from a subset of the data.
-    # NOTE: Instead:
-    #           1. Combine training files into a single training set (same for test test)
-    #               -> write a proper DataLoader class that combines all separate recordings into a single logical dataset
-    #           2. Replace for-loop over datasets in the `main`, with the for-loop over epochs inside the `train` method
-    #       This change will make sure that your model learns from all recordings in the dataset, before updating its weights on each epoch
-
-    ##########
-    # TODO: instantiate a custom `Dataset` class that wrap all the h5 files in a single dataset that can be shuffled internally in batches of `batch_size`
-    #       Look at https://github.com/maximyudayev/Realtime-ST-GCN/blob/main/data_prep/dataset.py
-    ##########
     train_dataset = VctkWavDataset(train_dataset_list)
     test_dataset = VctkWavDataset(test_dataset_list)
-    ##########
-    ##########
-    train_loader = DataLoader(train_dataset, batch_size=1, shuffle=True)
-    test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
+    
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     for epoch in range(num_epochs):
         # Run one training epoch and step the optimizer
         start_time_train = time.time()
-        train_loss = train_epoch(model, train_loader, batch_size, optimizer, criterion, device=device)
+        train_loss = train_epoch(model, train_loader, optimizer, criterion, device=device)
         end_time_train = time.time()
 
         # Run one testing (validation) epoch
         start_time_test = time.time()
-        test_loss = test_epoch(model, test_loader, batch_size, criterion, device=device)
+        test_loss = test_epoch(model, test_loader, criterion, device=device)
         end_time_test = time.time()
 
         print(f"Epoch {epoch+1}/{num_epochs} | "

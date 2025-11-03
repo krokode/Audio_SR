@@ -3,7 +3,22 @@ import torch.nn as nn
 from tqdm import tqdm # Provides a progress bar
 
 
-def train_epoch(model, dataloader, batch_size, optimizer, criterion, device):
+def fix_shape(inputs):
+    if inputs.dim() == 3:
+        # If middle dimension is larger than last
+        if inputs.shape[1] > inputs.shape[2]:
+            inputs = inputs.permute(0, 2, 1)
+            # print(f"traintest fix_shape dim==3 permute {inputs.shape}")
+    # else assume it's already (batch, channels, seq_len)
+    elif inputs.dim() == 2:
+        # print(f"traintest fix_shape dim==2unsqueeze(1) {inputs.shape}")
+        inputs = inputs.unsqueeze(1)
+        
+    return inputs
+    
+
+
+def train_epoch(model, dataloader, optimizer, criterion, device):
     """
     Trains the model for one epoch.
 
@@ -21,31 +36,15 @@ def train_epoch(model, dataloader, batch_size, optimizer, criterion, device):
     total_loss = 0.0
 
     # Iterate over the training data with a progress bar
-    for i, (inputs, targets) in enumerate(tqdm(dataloader, desc="Training", leave=False)):
+    for inputs, targets in tqdm(dataloader, desc="Training", leave=False):
         # Move data to the specified device
         inputs, targets = inputs.to(device), targets.to(device)
 
-        # Ensure tensors are (batch, channels, seq_len) for Conv1d.
-        # Handle common dataset output shapes:
-        # - (batch, seq_len) -> add channel dim -> (batch, 1, seq_len)
-        # - (batch, seq_len, channels) where channels==1 -> permute to (batch, 1, seq_len)
-        if inputs.dim() == 3:
-            # If middle dimension is larger than last, assume (batch, seq_len, channels)
-            if inputs.shape[1] > inputs.shape[2]:
-                inputs = inputs.permute(0, 2, 1)
-            # else assume it's already (batch, channels, seq_len)
-        elif inputs.dim() == 2:
-            inputs = inputs.unsqueeze(1)
+        inputs = fix_shape(inputs)
+        targets = fix_shape(targets)
 
-        if targets.dim() == 3:
-            if targets.shape[1] > targets.shape[2]:
-                targets = targets.permute(0, 2, 1)
-        elif targets.dim() == 2:
-            targets = targets.unsqueeze(1)
-
-        if (not (i % batch_size)):
-            # Zero the parameter gradients
-            optimizer.zero_grad()
+        # Zero the parameter gradients
+        optimizer.zero_grad()
         
         # Get model outputs
         outputs = model(inputs)
@@ -56,8 +55,7 @@ def train_epoch(model, dataloader, batch_size, optimizer, criterion, device):
         # Backward pass and optimization
         loss.backward()
 
-        if ((i > 0) and not ((i+1) % batch_size)):
-            optimizer.step()
+        optimizer.step()
 
         # Accumulate the loss
         total_loss += loss.item()
@@ -66,7 +64,7 @@ def train_epoch(model, dataloader, batch_size, optimizer, criterion, device):
     return total_loss / len(dataloader)
 
 
-def test_epoch(model, dataloader, batch_size, criterion, device):
+def test_epoch(model, dataloader, criterion, device):
     """
     Evaluates the model on the test/validation dataset.
 
@@ -89,18 +87,8 @@ def test_epoch(model, dataloader, batch_size, criterion, device):
             # Move data to the specified device
             inputs, targets = inputs.to(device), targets.to(device)
 
-            # Ensure tensors are (batch, channels, seq_len) for Conv1d.
-            if inputs.dim() == 3:
-                if inputs.shape[1] > inputs.shape[2]:
-                    inputs = inputs.permute(0, 2, 1)
-            elif inputs.dim() == 2:
-                inputs = inputs.unsqueeze(1)
-
-            if targets.dim() == 3:
-                if targets.shape[1] > targets.shape[2]:
-                    targets = targets.permute(0, 2, 1)
-            elif targets.dim() == 2:
-                targets = targets.unsqueeze(1)
+            inputs = fix_shape(inputs)
+            targets = fix_shape(targets)
 
             # Forward pass
             outputs = model(inputs)
