@@ -152,7 +152,7 @@ activemq-data/
 /vsc_*
 # src/visualizations/
 /docs/
-/dev/
+# /dev/
 /data/vctk/datasets/
 /data/vctk/VCTK-Corpus/
 /data/vctk/speaker1/full-data*
