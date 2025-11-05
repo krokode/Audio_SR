@@ -55,11 +55,10 @@ cd $VSC_DATA/Audio_SR/data/vctk
 tar -xvf VCTK-Corpus.tar.gz
 ```
 
-## Prepare
-Preprocess extracted data as h5 files
-
+## Preprocess
+Prepare the raw data for the planned experiment:
 ```bash
-python prepare_dataset.py
+python prepare_dataset.py --sampling_rate 16000 --scale 4 --window_size 8192 --window_stride 4096 --batch_size 128 --interpolate --low_pass --out_dir 'datasets'
 ```
 
 # Train

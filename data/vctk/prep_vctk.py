@@ -1,8 +1,5 @@
-"""
-Create an HDF5 file of patches for training super-resolution model.
-"""
-
-import os, argparse
+import os
+import argparse
 import numpy as np
 import h5py
 import pickle
@@ -11,23 +8,6 @@ from scipy import interpolate
 from scipy.signal import decimate
 from scipy.signal import butter, lfilter
 import re
-
-parser = argparse.ArgumentParser()
-
-parser.add_argument('--file-list', help='list of input wav files to process')
-parser.add_argument('--in-dir', default='~/', help='folder where input files are located')
-parser.add_argument('--out', help='path to output h5 archive')
-parser.add_argument('--scale', type=int, default=2, help='scaling factor')
-parser.add_argument('--dimension', type=int, help='dimension of patches--use -1 for no patching')
-parser.add_argument('--stride', type=int, default=3200, help='stride when extracting patches')
-parser.add_argument('--interpolate', action='store_true', help='interpolate low-res patches with cubic splines')
-parser.add_argument('--low-pass', action='store_true', help='apply low-pass filter when generating low-res patches')
-parser.add_argument('--batch-size', type=int, default=128, help='we produce # of patches that is a multiple of batch size')
-parser.add_argument('--sr', type=int, default=16000, help='audio sampling rate')
-parser.add_argument('--sam', type=float, default=1., help='subsampling factor for the data')
-parser.add_argument('--full_sample', type=bool, default=True);
-
-args = parser.parse_args()
 
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
@@ -45,6 +25,9 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
 
 
 def add_data(h5_file, inputfiles, args, save_examples=False):
+    """
+    Create an HDF5 file of patches for training super-resolution model.
+    """
     # Make a list of all files to be processed
     file_list = []
     ID_list = []
@@ -57,6 +40,7 @@ def add_data(h5_file, inputfiles, args, save_examples=False):
                 file_list.append(os.path.join(args.in_dir, filename))
 
     num_files = len(file_list)
+    # print(f"Got {num_files} files for {h5_file}")
 
     # patches to extract and their size
     if args.dimension != -1:
@@ -68,9 +52,9 @@ def add_data(h5_file, inputfiles, args, save_examples=False):
             s, s_lr = args.stride, args.stride / args.scale
     hr_patches, lr_patches = list(), list()
 
-    print(len(file_list))
+    # print(len(file_list))
     for j, file_path in enumerate(file_list):
-        if j % 10 == 0: print('%d/%d' % (j, num_files))
+        # if j % 10 == 0: print('%d/%d' % (j, num_files))
 
         directory_id_matches = re.search(fr'p(\d{{3}})\{os.path.sep}', file_path)
         ID = int(directory_id_matches.group(1))
@@ -144,14 +128,13 @@ def add_data(h5_file, inputfiles, args, save_examples=False):
 
         data_set[...] = lr_patches
         label_set[...] = hr_patches
-        print(len(ID_list))
+        # print(len(ID_list))
         pickle.dump(ID_list, open('ID_list_patches_'+str(d)+'_'+str(args.scale), 'wb'))
     else:
         # pickle the data
         pickle.dump(hr_patches, open('full-label-'+args.out[:-7],'wb'))
         pickle.dump(lr_patches, open('full-data-'+args.out[:-7],'wb'))
         pickle.dump(ID_list, open('ID_list','wb'))
-
 
 
 def upsample(x_lr, r):
@@ -168,7 +151,25 @@ def upsample(x_lr, r):
 
     return x_sp
 
+
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('--file_list', help='list of input wav files to process')
+    parser.add_argument('--in_dir', default='~/', help='folder where input files are located')
+    parser.add_argument('--out', help='path to output h5 archive')
+    parser.add_argument('--scale', type=int, default=2, help='scaling factor')
+    parser.add_argument('--dimension', type=int, help='dimension of patches--use -1 for no patching')
+    parser.add_argument('--stride', type=int, default=3200, help='stride when extracting patches')
+    parser.add_argument('--interpolate', action='store_true', help='interpolate low-res patches with cubic splines')
+    parser.add_argument('--low_pass', action='store_true', help='apply low-pass filter when generating low-res patches')
+    parser.add_argument('--batch_size', type=int, default=128, help='we produce # of patches that is a multiple of batch size')
+    parser.add_argument('--sr', type=int, default=16000, help='audio sampling rate')
+    parser.add_argument('--sam', type=float, default=1., help='subsampling factor for the data')
+    parser.add_argument('--full_sample', type=bool, default=True)
+
+    args = parser.parse_args()
+
     # create train or test h5 file
     with h5py.File(args.out, 'w') as f:
         add_data(f, args.file_list, args, save_examples=False)

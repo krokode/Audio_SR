@@ -17,7 +17,7 @@ from dataset import VctkWavDataset
 
 if __name__ == "__main__":
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    batch_size = 64 # depending on available mamory choose what batch size to use 1, 2, 4, 8, 16, 32, 64, 128
+    batch_size = 128 # depending on available mamory choose what batch size to use 1, 2, 4, 8, 16, 32, 64, 128
     upscale_factor = 4
     num_epochs = 150
     quality_mode = True 
